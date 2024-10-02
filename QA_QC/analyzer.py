@@ -3,6 +3,7 @@
 import sys 
 import numpy
 import datetime
+from openpyxl.workbook import Workbook
 import pandas as pd
 #import decimal **Used for handling decimals used in equations 
 #import rich ***Used for a better looking and colorful output. I.E errors in cli
@@ -25,7 +26,7 @@ bp_keys = ['Barometric_Pressure', 'barometric_pressure', 'BP', 'bp', 'baro']
 
 def file_read(file_path):
     try:
-        df = pd.read_csv(file_path)
+        df = pd.read_csv(file_path)  
         df.columns = df.columns.str.strip()
         return df
 
@@ -34,14 +35,16 @@ def file_read(file_path):
     
 while True:
     file_path = input("Enter the path to the CSV file (or 'exit' to quit): ")
+    
     if file_path == 'exit':
-            print("Exiting the program.")
-            break
-    df = file_read(file_path)
-    if df is not None:
-       break
+        print("Exiting the program.")
+        sys.exit()
+    elif file_path.endswith(".csv"):
+        break  
+    else:
+        print("This is not a CSV file. Please try again.")
 
-
+        
 def col_filter(name_key,filter_key):
     df = time_check()
     df_columns = df[[col for col in df.columns if any(keyword in col for keyword in (name_key))]]
@@ -49,7 +52,7 @@ def col_filter(name_key,filter_key):
     new_keys = df[[col for col in df.columns if any(keyword in col for keyword in (filter_key))]]
     for column in df_index:
         if any(new_key in column for new_key in new_keys):  
-            print(column)
+            return column
     return None 
 
 
@@ -65,24 +68,42 @@ def time_check():
         df_new.index.name = 'TIMESTAMP'
         return df_new
 
+def highlight(df,y,z):
+    df = df
+    color = 'background-color: yellow'
+    df_color = pd.DataFrame('', index=df.index, columns=df.columns)
+    df_style[y] = color
+    df_sytle[z] = color
+    return df_color
 
+#check if ws is 0 for more than 3 hours, and if wd is in the same direction but ws is low. 
 def ws_check():
     df = time_check()
+    ws_title = str.strip(col_filter(ws_keys, filter_keys))
+    wd_title = str.strip(col_filter(wd_keys, filter_keys))
+    ws_column = df.loc[:,ws_title]
+    wd_column = df.loc[:,wd_title]
+    for ws in ws_column:
+        for wd in wd_column:
+            print(ws,wd)
+            #            if ws == 2.005 and wd == 337.1:
+#                highlight(df,ws_column,wd_column)
+#                return df.style.apply(highlight, axis=None) 
+    df[[ws_column,wd_column]] = df[[ws_column,wd_column]]
     
+    return df
 
 
-
-
-'''Export the QA/QC file'''#specify the file and then add it here 
+'''Export the QA/QC file'''
 def QAQC_file():
-    wind_check().to_csv('temp.csv', index=False)
+    ws_check().to_excel('temp.xlsx') #, index=False)
 
 check = str(file_path)
 
 if  len(check) == 0:
     sys.exit()
 else:    
-    col_filter(ws_keys, filter_keys)
+    QAQC_file() 
     #ws_check()
 #can be used for nesting code if you do not want it to run when calling functions from another script. 
 #if __name__ == '__main__' 
