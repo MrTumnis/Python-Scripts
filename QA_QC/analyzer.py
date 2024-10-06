@@ -23,6 +23,23 @@ sr_keys = ['Solar_Radiation', 'solar_radiation', 'Solar_Rad', 'solar_rad', 'SR',
 precip_keys = ['Precipitation', 'precipitation', 'Precip', 'precip']
 bp_keys = ['Barometric_Pressure', 'barometric_pressure', 'BP', 'bp', 'baro']
 
+'''Wind Compass'''
+north   = [337.6, 22.5]
+north_e = [22.6, 67.5]
+east    = [67.6,112.5]
+south_e = [112.6,157.5]  
+south   = [157.6,202.5]
+south_w = [202.6,247.5]
+west    = [247.6,292.5]
+north_w = [292.6, 337.6]
+
+cardinal = {"N","NE","E","SE","S","SW","W","NW","N"}
+
+'''Highlight Colors'''
+yellow = 'yellow'
+lblue = 'lightblue'
+lred = 'lightred'
+
 
 def file_read(file_path):
     try:
@@ -33,17 +50,6 @@ def file_read(file_path):
     except pd.errors.EmptyDataError:
         print(f"Error: The file '{file_path}' is empty.")
     
-while True:
-    file_path = input("Enter the path to the CSV file (or 'exit' to quit): ")
-    
-    if file_path == 'exit':
-        print("Exiting the program.")
-        sys.exit()
-    elif file_path.endswith(".csv"):
-        break  
-    else:
-        print("This is not a CSV file. Please try again.")
-
         
 def col_filter(name_key,filter_key):
     df = time_check()
@@ -54,6 +60,23 @@ def col_filter(name_key,filter_key):
         if any(new_key in column for new_key in new_keys):  
             return column
     return None 
+
+
+def cell_color(df, condition, col, col2=None):
+    if col not in df.columns:
+        raise ValueError(f"Column '{col}' not found in the DataFrame.")
+    if col2 is not None and col2 not in df.columns:
+        raise ValueError(f"Column '{col2}' not found in the DataFrame.")
+
+    df_style = pd.DataFrame('', index=df.index, columns=df.columns)  # Initialize style DataFrame
+
+    # Apply coloring based on the condition
+    if col2:
+        df_style.loc[condition, [col, col2]] = f'background-color: {yellow}'  # Color for both columns
+    else:
+        df_style.loc[condition, col] = f'background-color: {lblue}'  # Color only for ws_col
+
+    return df_style
 
 
 '''QA checks'''
@@ -68,42 +91,44 @@ def time_check():
         df_new.index.name = 'TIMESTAMP'
         return df_new
 
-def highlight(df,y,z):
-    df = df
-    color = 'background-color: yellow'
-    df_color = pd.DataFrame('', index=df.index, columns=df.columns)
-    df_style[y] = color
-    df_sytle[z] = color
-    return df_color
+def ws_check(df, ws_col, wd_col):
+    zero_mask = (df[ws_col] <= .5) # Identify non-negative values in ws_col
+    condition = pd.Series(False, index=df.index)  # Initialize a condition Series
 
-#check if ws is 0 for more than 3 hours, and if wd is in the same direction but ws is low. 
-def ws_check():
-    df = time_check()
+    for i in range(len(df) - 1):  # Iterate over the DataFrame
+        if zero_mask[i:i + 3].all():  
+            # Check if the wd_col values are within ±1 of each other for three consecutive rows
+            if (df[wd_col].iloc[i:i + 4].max() - df[wd_col].iloc[i:i + 4].min()) <= 3:
+                condition[i:i + 4] = True  # Set the condition to True for these indices
+
+    return condition  # Return the condition Series
+
+def ws_test():
+    df = file_read(file_path)
     ws_title = str.strip(col_filter(ws_keys, filter_keys))
     wd_title = str.strip(col_filter(wd_keys, filter_keys))
-    ws_column = df.loc[:,ws_title]
-    wd_column = df.loc[:,wd_title]
-    for ws in ws_column:
-        for wd in wd_column:
-            print(ws,wd)
-            #            if ws == 2.005 and wd == 337.1:
-#                highlight(df,ws_column,wd_column)
-#                return df.style.apply(highlight, axis=None) 
-    df[[ws_column,wd_column]] = df[[ws_column,wd_column]]
     
-    return df
-
+    condition = ws_check(df, ws_title, wd_title)  # Get the condition from ws_check
+    
+    # Apply cell_color based on the condition
+    return df.style.apply(lambda x: cell_color(x, condition, col=ws_title, col2=wd_title), axis=None)
 
 '''Export the QA/QC file'''
 def QAQC_file():
-    ws_check().to_excel('temp.xlsx') #, index=False)
+    date = datetime.datetime.now()
+    styled_df = ws_test()
+    styled_df.to_excel(date.strftime("%Y%m%d") + '-' + 'temp.xlsx', index=False)
 
-check = str(file_path)
+if __name__ == '__main__':
+    while True:
+        file_path = input("Enter the path to the 15-min CSV file (or 'exit' to quit): ")
 
-if  len(check) == 0:
-    sys.exit()
-else:    
-    QAQC_file() 
-    #ws_check()
-#can be used for nesting code if you do not want it to run when calling functions from another script. 
-#if __name__ == '__main__' 
+        if file_path == 'exit':
+            print("Exiting the program.")
+            sys.exit()
+        elif file_path.endswith(".csv"):
+            break  
+        else:
+            print("This is not a CSV file. Please try again.")
+
+    QAQC_file()
