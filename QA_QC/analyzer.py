@@ -6,7 +6,7 @@ import datetime
 from openpyxl.workbook import Workbook
 import pandas as pd
 #import decimal **Used for handling decimals used in equations 
-#import rich ***Used for a better looking and colorful output. I.E errors in cli
+from rich import print #***Used for a better looking and colorful output. I.E errors in cli
 
 
 '''Key words'''
@@ -94,22 +94,21 @@ def time_check():
 def ws_check(df, ws_col, wd_col):
     zero_mask = (df[ws_col] <= .5) 
     condition = pd.Series(False, index=df.index)  
-
     for i in range(len(df) - 1):  
         if zero_mask[i:i + 3].all():  
             # Check if the wd_col values are within ±1 of each other for three consecutive rows
             if (df[wd_col].iloc[i:i + 4].max() - df[wd_col].iloc[i:i + 4].min()) <= 3:
                 condition[i:i + 4] = True  
-
     return condition  
 
 def ws_test():
     df = file_read(file_path)
+    print(df)
     ws_title = str.strip(col_filter(ws_keys, filter_keys))
     wd_title = str.strip(col_filter(wd_keys, filter_keys))
-    
+    print(type(wd_title))
+
     condition = ws_check(df, ws_title, wd_title)  # Get the condition from ws_check
-    
     # Apply cell_color based on the condition
     return df.style.apply(lambda x: cell_color(x, condition, col=ws_title, col2=wd_title), axis=None)
 
@@ -123,7 +122,7 @@ def ws_test():
 def QAQC_file():
     date = datetime.datetime.now()
     styled_df = ws_test()
-    styled_df.to_excel(date.strftime("%Y%m%d") + '-' + 'temp.xlsx', index=False)
+    styled_df.to_excel(date.strftime("%Y%m%d") + '-' + f"{file_path}" + '.xlsx', index=False)
 
 if __name__ == '__main__':
     while True:
