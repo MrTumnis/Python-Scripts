@@ -92,16 +92,16 @@ def time_check():
         return df_new
 
 def ws_check(df, ws_col, wd_col):
-    zero_mask = (df[ws_col] <= .5) # Identify non-negative values in ws_col
-    condition = pd.Series(False, index=df.index)  # Initialize a condition Series
+    zero_mask = (df[ws_col] <= .5) 
+    condition = pd.Series(False, index=df.index)  
 
-    for i in range(len(df) - 1):  # Iterate over the DataFrame
+    for i in range(len(df) - 1):  
         if zero_mask[i:i + 3].all():  
             # Check if the wd_col values are within ±1 of each other for three consecutive rows
             if (df[wd_col].iloc[i:i + 4].max() - df[wd_col].iloc[i:i + 4].min()) <= 3:
-                condition[i:i + 4] = True  # Set the condition to True for these indices
+                condition[i:i + 4] = True  
 
-    return condition  # Return the condition Series
+    return condition  
 
 def ws_test():
     df = file_read(file_path)
@@ -112,6 +112,12 @@ def ws_test():
     
     # Apply cell_color based on the condition
     return df.style.apply(lambda x: cell_color(x, condition, col=ws_title, col2=wd_title), axis=None)
+
+
+#check for 0's or extreme negatives. Compare to RTD, if it exists. 
+#def temp_check():
+
+
 
 '''Export the QA/QC file'''
 def QAQC_file():
