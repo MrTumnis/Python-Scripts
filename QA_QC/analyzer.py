@@ -10,18 +10,20 @@ from rich import print #***Used for a better looking and colorful output. I.E er
 
 
 '''Key words'''
-ws_keys = ['WindSpeed', 'WS', 'windspeed', 'Ws', '_S_']
-wd_keys = ['WindDirection', 'WD', 'WindDir', 'wind_direction', 'wind_dir', 'Wd', '_D_', '_D1_']
-filter_keys = ['WVT', 'WVt', 'Wvt', 'wvt', 'WVC', 'WVc', 'Wvc', 'wvc']
-avg_keys = ['AVG', 'Avg', 'avg']
-min_keys = ['MIN', 'Min', 'min']
-max_keys = ['MAX', 'Max', 'max']
-airtemp_keys = ['Temperature', 'temperature', 'temp', 'Temp', 'AirTC', 'TC']
-rh_keys = ['Relative_Humidity', 'relative_humidity', 'RH', 'rh']
-rtdtemp_keys = ['RTD', 'DeltaT', 'delta', 'rtd']
-sr_keys = ['Solar_Radiation', 'solar_radiation', 'Solar_Rad', 'solar_rad', 'SR', 'sr']
-precip_keys = ['Precipitation', 'precipitation', 'Precip', 'precip']
-bp_keys = ['Barometric_Pressure', 'barometric_pressure', 'BP', 'bp', 'baro']
+ws_keys = {'WindSpeed', 'WS', 'windspeed', 'Ws', '_S_'}
+wd_keys = {'WindDirection', 'WD', 'WindDir', 'wind_direction', 'wind_dir', 'Wd', '_D_', '_D1_'}
+filter_keys = {'WVT', 'WVt', 'Wvt', 'wvt', 'WVC', 'WVc', 'Wvc', 'wvc'}
+avg_keys = {'AVG', 'Avg', 'avg'}
+min_keys = {'MIN', 'Min', 'min'}
+max_keys = {'MAX', 'Max', 'max'}
+tot_keys = {'TOT', 'Tot', 'tot'}
+temp_keys = {'Temperature', 'temperature', 'temp', 'Temp', 'AirTC', 'TC'}
+rh_keys = {'Relative_Humidity', 'relative_humidity', 'RH', 'rh'}
+rtd_keys = {'RTD','rtd'}
+delta_keys= {'DeltaT', 'delta'}
+sr_keys = {'Solar_Radiation', 'solar_radiation', 'Solar_Rad', 'solar_rad', 'SR', 'sr'}
+precip_keys = {'Precipitation', 'precipitation', 'Precip', 'precip'}
+bp_keys = {'Barometric_Pressure', 'barometric_pressure', 'BP', 'bp', 'baro'}
 
 '''Wind Compass'''
 north   = [337.6, 22.5]
@@ -54,11 +56,12 @@ def file_read(file_path):
 def col_filter(name_key,filter_key):
     df = time_check()
     df_columns = df[[col for col in df.columns if any(keyword in col for keyword in (name_key))]]
-    df_index = df_columns.columns  
+#    df_index = df_columns.columns  
     new_keys = df[[col for col in df.columns if any(keyword in col for keyword in (filter_key))]]
-    for column in df_index:
+    for column in df_columns:
         if any(new_key in column for new_key in new_keys):  
             return column
+
     return None 
 
 
@@ -103,10 +106,8 @@ def ws_check(df, ws_col, wd_col):
 
 def ws_test():
     df = file_read(file_path)
-    print(df)
     ws_title = str.strip(col_filter(ws_keys, filter_keys))
     wd_title = str.strip(col_filter(wd_keys, filter_keys))
-    print(type(wd_title))
 
     condition = ws_check(df, ws_title, wd_title)  # Get the condition from ws_check
     # Apply cell_color based on the condition
@@ -114,15 +115,27 @@ def ws_test():
 
 
 #check for 0's or extreme negatives. Compare to RTD, if it exists. 
-#def temp_check():
+def temp_check():
+    df = file_read(file_path)
+    temp_title = str.strip(col_filter(temp_keys, avg_keys))
+    rtd_title = str.strip(col_filter(rtd_keys, avg_keys))
+    rh_title = str.strip(col_filter(rh_keys, avg_keys))
+    if temp_title in df.columns:
+        print(temp_title)
+    return df
 
+
+
+#def rh_check():
+#def sr_check():
+#def precip_check():
 
 
 '''Export the QA/QC file'''
 def QAQC_file():
     date = datetime.datetime.now()
     styled_df = ws_test()
-    styled_df.to_excel(date.strftime("%Y%m%d") + '-' + f"{file_path}" + '.xlsx', index=False)
+    styled_df.to_excel(date.strftime("%Y%m%d") + '-' + f"{file_path.strip('.csv')}" + '.xlsx', index=False)
 
 if __name__ == '__main__':
     while True:
