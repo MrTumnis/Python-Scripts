@@ -7,6 +7,7 @@ precip_keys = {'Precipitation', 'precipitation', 'Precip', 'precip'}
 bp_keys = {'Barometric_Pressure', 'barometric_pressure', 'BP', 'bp', 'baro'}
 temp_keys = {'Temperature', 'temperature', 'temp', 'Temp', 'AirTC', 'TC'}
 rh_keys = {'Relative_Humidity', 'relative_humidity', 'RH', 'rh'}
+evap_keys = {'EvapHr', 'EvapPan', 'Evap', 'evap'}
 #filter keys
 vector_keys= {'WVT', 'WVt', 'Wvt', 'wvt', 'WVC', 'WVc', 'Wvc', 'wvc'}
 avg_keys = {'AVG', 'Avg', 'avg'}
