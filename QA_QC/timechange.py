@@ -44,46 +44,50 @@ def col_filter(name_key,filter_key=None):
 #check for timestamp aggregation and change it to user specified...eventually
 def time_check():
     df = file_read(file_path)
-    if 'TIMESTAMP' in df.columns:
-        df['TIMESTAMP'] = pd.to_datetime(df['TIMESTAMP'].iloc[1:], errors='coerce')
-#        if df['TIMESTAMP'].isna().any():
-#                ic("Value in TIMESTAMP column is 'Not a Time'")
-
-        df.dropna(subset=['TIMESTAMP'], inplace=True)
-        df.set_index('TIMESTAMP', inplace=True)
-        df_new = df.reindex(pd.date_range(start=df.index[1], end=df.index[-1], freq='60min'))  
-        df_new.index.name = 'TIMESTAMP'
-        ic(df_new)
-        return df_new
+ #   if 'TIMESTAMP' in df.columns:
+    df['TIMESTAMP'] = pd.to_datetime(df['TIMESTAMP'].iloc[1:], errors='coerce')
+    df.dropna(subset=['TIMESTAMP'], inplace=True)
+    
+    diff_check = df["TIMESTAMP"].diff()
+#    ic(diff_check) 
+    for diff in diff_check:
+        if diff == pd.Timedelta(15,'min'):
+            print("This is a 15-min file")
+            break 
+#    sixty_check = (diff_check == pd.Timedelta(60,'min')).head():
+#        if any(sixty_check == True):
+#            print("This is a 60-minute file")
+    else:
+        print("This is not a proper data structure, or the timestamp is not a valid interval")
+    #        df_new = df.reindex(pd.date_range(start=df.index[1], end=df.index[-1], freq='60min'))  
+#        df_new.index.name = 'TIMESTAMP'
+    return df
 
 '''Define Aggregation'''
-def agg_type():
-    df = file_read(file_path)
+def agg_type(df_new):
+   # df = file_read(file_path)
+    df = df_new
     df_avg = col_filter(avg_keys)
     df_tot = col_filter(tot_keys)
     df_max = col_filter(max_keys)
     df_min = col_filter(min_keys)
     df_vec = col_filter(vector_keys)
-    timestamp = []
-
+    
 #average the columns from an hour ending format i.e 00:00 to 00:15 is the 00:15 data point
-   # if df["TIMESTAMP"].diff() == 1:
     col = [col for col in df if any(key in col for key in (df_avg))]
-    ic(df[col])
+#    ic(df[col])
 
-#Timestamp differnce check 
-    for time in df["TIMESTAMP"].loc[:].head():
-        time.strip('TIMESTAMP')
-        timestamp.append(time)
-        print(timestamp)
-    #df["TIMESTAMP"] = pd.to_datetime(df["TIMESTAMP"])
-#    new = df["TIMESTAMP"].iloc[3] - df["TIMESTAMP"].iloc[4] 
-    #ic(df["TIMESTAMP"].diff())
+#    timestamp= df["TIMESTAMP"]
+#    diff_check = timestamp.diff()
+#    fifteen_check = (dif_check == pd.Timedelta(15,'min')).head()
+#    if any(fifteen_check == True):
+#        print(check)
+
 
 '''Export the new time file'''
 def time_file():
     date = datetime.datetime.now()
-    styled_df = agg_type()
+    styled_df = agg_type(time_check())
     styled_df.to_csv(date.strftime("%Y%m%d") + '-' + f"{file_path}", index=True)
 
 if __name__ == '__main__':
