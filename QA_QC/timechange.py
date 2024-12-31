@@ -2,7 +2,7 @@
 
 import sys 
 from keys import *
-import numpy
+import numpy as np
 import datetime
 #from openpyxl.workbook import Workbook
 import pandas as pd
@@ -13,17 +13,28 @@ from functools import lru_cache
 
 def file_read(file_path):
     try:
-        df = pd.read_csv(file_path, index_col=False)  
-    #df['TIMESTAMP'] = pd.to_datetime(df['TIMESTAMP'].iloc[1:], errors='coerce')
-        #df.reset_index(drop=True, inplace=True) 
-        #df.set_index('TIMESTAMP', inplace=True) 
+        df = pd.read_csv(file_path)
+        for row in df.head(n=1).itertuples():
+            if any(type(item) == type('float') for item in row):
+                df = df.drop(0)
+
+        df1 = pd.to_datetime(df['TIMESTAMP'], errors='coerce')
+        df1 = df1.to_frame()
+        df = df.iloc[:,1:].astype(float)
+        df_new = pd.concat([df1, df], axis=1)
+#        df.set_index('TIMESTAMP', inplace=True) 
+#        df.fillna(df.iloc[:,[0]], inplace=True)
         df.columns = df.columns.str.strip()
-        return df
+        return df_new
 
-    except pd.errors.EmptyDataError:
-        print(f"Error: The file '{file_path}' is empty.")
+    except Exception as e:
+        print(f"Error occurred: {e}")
+    return None
+
+#    except pd.errors.EmptyDataError:
+ #       print(f"Error: The file '{file_path}' is empty.")
         
-
+'''can likely simplify and merge 'agg_type' function as there is no need (yet) to filter a single column'''
 def col_filter(name_key,filter_key=None):
     df = file_read(file_path)
     headers = [] 
@@ -45,51 +56,35 @@ def col_filter(name_key,filter_key=None):
 
 '''The ultimate goal is to read the timestamp automatically, and give the user an option to choose the frequency that they would like the data to change to. I.E if the file is 15-min, then change it to 1-hour. Use ".resample().mean() for data that is an  "Avg" aggregation. You can specify closed="right" or "left" to make the data hour ending or hour beginig"'''
 
-def time_check():
+def time_check(time):
     df = file_read(file_path)
-    df['TIMESTAMP'] = pd.to_datetime(df['TIMESTAMP'].iloc[1:], errors='coerce')
-    df.dropna(subset=['TIMESTAMP'], inplace=True)
-    diff_check = df['TIMESTAMP'].diff().head()
 
-    time15 = True if (diff for diff in diff_check == pd.Timedelta(15,'min')) else print("This is not a proper time format")
-    time60= True if (diff for diff in diff_check == pd.Timedelta(60,'min')) else print("This is not a proper time format")
-    time24= True if (diff for diff in diff_check == pd.Timedelta(1440,'min')) else print("This is not a proper time format")
-    time5 = True if (diff for diff in diff_check == pd.Timedelta(5,'min')) else print("This is not a proper time format")
-    print(time60)  
+#    df.set_index('TIMESTAMP', inplace=True) 
+#    print(df.iloc[:,[0]])
+#    diff_check = pd.infer_freq(df.index)
 
-#    time15 = time60 = time24 = time5 = False
-
-    # Loop through the differences to check for time intervals
-#    for diff in diff_check:
-#        if diff == pd.Timedelta(15, 'min'):
-#            print("This is a 15-min file")
-#            time15 = True
-
-#        elif diff == pd.Timedelta(60, 'min'):
-#            print("This is a 60-min file")
-#            time60 = True
-#
-#        elif diff == pd.Timedelta(1, 'day'):
-#            print("This is a Daily file")
-#            time24 = True
-#        
-#        elif diff == pd.Timedelta(5, 'min'):
-#            print("This is a 5-min file")
-#            time5 = True
-    return time15, time60, time24, time5 
+    #find the differnce of the timestamp column
+    df['diff_check'] = df.iloc[:6,0].diff().head()
+    if df['diff_check'].mode()[0] == pd.Timedelta((time), 'min'):
+      #  print(f"This is a {time}-min file")
+        return True
+    else:
+        return False
 
 
 '''How do I handle columns that do not specify an aggregation? I.E EvapHr for Trench station. Should I enable the user to choose?'''
 
-def time_change(df):
-    df['TIMESTAMP'] = pd.to_datetime(df['TIMESTAMP'].iloc[1:], errors='coerce')
-    df.dropna(subset=['TIMESTAMP'], inplace=True)
+'''need to set up an check for user input incase something other than a time is entered'''
+def time_change():
+    df = file_read(file_path)
     df.set_index('TIMESTAMP', inplace=True)
+#    time = input("What frequency would you like to change the file to? 15, 30, 60, 1440?")
 
-    if time_check() == time15:
-        print(df) 
-        df_new = df.resample('1h').mean()
-        ic(df_new)
+    if time_check(60) == True:
+        df_new = df.resample('D').mean()
+        print(f"This is a 60-min file")
+    else:
+        ic("Time check = False")
 #    df_new.index.name = 'TIMESTAMP'
 
    # print("This is not a proper data structure, or the timestamp is not a valid interval")
@@ -97,7 +92,6 @@ def time_change(df):
 
 '''Define Aggregation'''
 def agg_type(df):
-   # df = file_read(file_path)
     df_avg = col_filter(avg_keys)
     df_tot = col_filter(tot_keys)
     df_max = col_filter(max_keys)
@@ -132,6 +126,7 @@ if __name__ == '__main__':
             break  
         else:
             print("This is not a CSV file. Please try again.")
-    df = file_read(file_path)
-    time_change(df) 
+#    df = file_read(file_path)
+    file_read(file_path)
+    time_change() 
 #    time_file()
