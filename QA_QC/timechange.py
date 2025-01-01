@@ -31,15 +31,37 @@ def file_read(file_path):
         print(f"Error occurred: {e}")
     return None
 
-#    except pd.errors.EmptyDataError:
- #       print(f"Error: The file '{file_path}' is empty.")
         
 '''can likely simplify and merge 'agg_type' function as there is no need (yet) to filter a single column'''
-def col_filter(name_key,filter_key=None):
+#def col_filter(name_key,filter_key=None):
+#    df = file_read(file_path)
+#    headers = [] 
+#    df_columns = [col for col in df.columns if any(key in col for key in (name_key))]
+#    df_columns = [col for col in df if any(key in col for key in (name_key))]
+#    df1 = df[df_columns].iloc[:]
+#    print(df1)
+
+#    if filter_key is not None:
+#        filter = [col for col in df_columns if any(key in col for key in (filter_key))]
+#        for column in df_columns:
+#            if any(key in column for key in filter):
+#                headers.append(column)
+#                return headers 
+#    else:
+#        return df_columns
+
+#    return None 
+
+'''How can I pass in multiple "keys" to be filtered into one dataframe? Store the passed keys in a list, then run them through the column checker, into another list, then concat the dataframe based on the original df column index???'''
+
+def col_filter(*name_key,**filter_key):
     df = file_read(file_path)
     headers = [] 
     df_columns = [col for col in df.columns if any(key in col for key in (name_key))]
-    
+#    df_columns = [col for col in df if any(key in col for key in (name_key))]
+    df1 = df[df_columns].iloc[:]
+    print(df1)
+
     if filter_key is not None:
         filter = [col for col in df_columns if any(key in col for key in (filter_key))]
         for column in df_columns:
@@ -51,42 +73,59 @@ def col_filter(name_key,filter_key=None):
 
     return None 
 
-
 '''Define Timestamps'''
 
 '''The ultimate goal is to read the timestamp automatically, and give the user an option to choose the frequency that they would like the data to change to. I.E if the file is 15-min, then change it to 1-hour. Use ".resample().mean() for data that is an  "Avg" aggregation. You can specify closed="right" or "left" to make the data hour ending or hour beginig"'''
 
-def time_check(time):
+
+def time_check():
     df = file_read(file_path)
 
-#    df.set_index('TIMESTAMP', inplace=True) 
-#    print(df.iloc[:,[0]])
-#    diff_check = pd.infer_freq(df.index)
-
-    #find the differnce of the timestamp column
     df['diff_check'] = df.iloc[:6,0].diff().head()
-    if df['diff_check'].mode()[0] == pd.Timedelta((time), 'min'):
-      #  print(f"This is a {time}-min file")
-        return True
+    one_hour = str('0 days 01:00:00')
+    fifteen_min = str('0 days 00:15:00')
+    five_min = str('0 days 00:05:00')
+    thirty_min = str('0 days 00:30:00')
+    one_day = str('1 days 00:00:00')
+
+    time = str(df['diff_check'].mode()[0]) 
+
+    if time == fifteen_min:
+        print(f"This is a 15-min file")
+    
+    elif time == thirty_min:
+        print(f"This is a 30-min file")
+
+    elif time == one_hour:
+        print(f"This is a 60-min file")
+
+    elif time == one_day:
+        print(f"This is a Daily file")
+
+    elif time == five_min:
+        print(f"This is a five-min file")
+
     else:
-        return False
+        print(f"{time} is not a valid time interval")
+
 
 
 '''How do I handle columns that do not specify an aggregation? I.E EvapHr for Trench station. Should I enable the user to choose?'''
 
-'''need to set up an check for user input incase something other than a time is entered'''
+'''SETUP: need to set up an check for user input incase something other than a time is entered. Possibly use a tkinter drop down??'''
 def time_change():
     df = file_read(file_path)
     df.set_index('TIMESTAMP', inplace=True)
-#    time = input("What frequency would you like to change the file to? 15, 30, 60, 1440?")
-
-    if time_check(60) == True:
-        df_new = df.resample('D').mean()
-        print(f"This is a 60-min file")
-    else:
-        ic("Time check = False")
-#    df_new.index.name = 'TIMESTAMP'
-
+    freq = [15, 30, 60, 1440]
+#    time = input(str("What frequency would you like to change the file to? 15, 30, 60, 1440? "))
+    time = int(60)
+    print(f"File will be converted to a {time}-min datafile")
+    new_time = [item for item in freq if item == time]
+  
+    if new_time[0] == int(60):
+        df_avg = col_filter(avg_keys)
+        ic(type(df_avg))
+        df_new = df.resample('h').mean()
    # print("This is not a proper data structure, or the timestamp is not a valid interval")
 
 
@@ -128,5 +167,6 @@ if __name__ == '__main__':
             print("This is not a CSV file. Please try again.")
 #    df = file_read(file_path)
     file_read(file_path)
+    time_check() 
     time_change() 
 #    time_file()
