@@ -4,9 +4,7 @@ import sys
 from keys import *
 import numpy as np
 import datetime
-#from openpyxl.workbook import Workbook
 import pandas as pd
-#import decimal #***Used for handling decimals used in equations 
 from rich import print #***Used for a better looking and colorful output. I.E errors in cli
 from icecream import ic
 from functools import lru_cache
@@ -32,46 +30,7 @@ def file_read(file_path):
     return None
 
         
-'''can likely simplify and merge 'agg_type' function as there is no need (yet) to filter a single column'''
-#def col_filter(name_key,filter_key=None):
-#    df = file_read(file_path)
-#    headers = [] 
-#    df_columns = [col for col in df.columns if any(key in col for key in (name_key))]
-#    df_columns = [col for col in df if any(key in col for key in (name_key))]
-#    df1 = df[df_columns].iloc[:]
-#    print(df1)
 
-#    if filter_key is not None:
-#        filter = [col for col in df_columns if any(key in col for key in (filter_key))]
-#        for column in df_columns:
-#            if any(key in column for key in filter):
-#                headers.append(column)
-#                return headers 
-#    else:
-#        return df_columns
-
-#    return None 
-
-'''How can I pass in multiple "keys" to be filtered into one dataframe? Store the passed keys in a list, then run them through the column checker, into another list, then concat the dataframe based on the original df column index???'''
-
-def col_filter(*name_key,**filter_key):
-    df = file_read(file_path)
-    headers = [] 
-    df_columns = [col for col in df.columns if any(key in col for key in (name_key))]
-#    df_columns = [col for col in df if any(key in col for key in (name_key))]
-    df1 = df[df_columns].iloc[:]
-    print(df1)
-
-    if filter_key is not None:
-        filter = [col for col in df_columns if any(key in col for key in (filter_key))]
-        for column in df_columns:
-            if any(key in column for key in filter):
-                headers.append(column)
-                return headers 
-    else:
-        return df_columns
-
-    return None 
 
 '''Define Timestamps'''
 
@@ -114,50 +73,53 @@ def time_check():
 
 '''SETUP: need to set up an check for user input incase something other than a time is entered. Possibly use a tkinter drop down??'''
 def time_change():
+    time_check()
     df = file_read(file_path)
     df.set_index('TIMESTAMP', inplace=True)
     freq = [15, 30, 60, 1440]
-#    time = input(str("What frequency would you like to change the file to? 15, 30, 60, 1440? "))
-    time = int(60)
+    time = input("What frequency would you like to change the file to? 15, 30, 60, 1440? ")
+    time = int(time)
     print(f"File will be converted to a {time}-min datafile")
     new_time = [item for item in freq if item == time]
-  
+   
+    #STILL NEED TO FIND A WAY TO HANDLE COLUMNS WIIHOUT OBVIOUS HEADERS. I.E EVAPHR OR SIMPLE NAMING CONVENTIONS LIKE PRECIP 
+    avg_fil = df.filter(regex=r"vg$", axis=1)
+    max_fil = df.filter(regex=r"ax$", axis=1)
+    min_fil = df.filter(regex=r"in$", axis=1)
+    tot_fil = df.filter(regex=r"ot$", axis=1)
+    win_fil = df.filter(regex=r"^W.*(?<![n,x])$", axis=1)
+    sig_fil = df.filter(regex=r"^S.*(?<![n,x,g])$", axis=1)
+    col_order = df.columns 
+    freq = 'h'
     if new_time[0] == int(60):
-        df_avg = col_filter(avg_keys)
-        ic(type(df_avg))
-        df_new = df.resample('h').mean()
+        df_avg = avg_fil.resample((freq), closed='right', label='right').mean()
+        df_max = max_fil.resample('h', closed='right', label='right').mean()
+        df_min = min_fil.resample('h', closed='right', label='right').mean()
+        df_tot = tot_fil.resample('h', closed='right', label='right').sum()
+        df_win = win_fil.resample('h', closed='right', label='right').mean()
+        df_sig = sig_fil.resample('h', closed='right', label='right').mean()
+        
+        df_or  = pd.concat([df_avg,df_max,df_min,df_win,df_sig,df_tot], axis=1)
+        df_reordered = df_or[col_order] 
+        df_new = df_reordered.apply(lambda x: round(x,2))
+        print(df_new)
+        return df_new, time
+    #    df_new = df.resample('h').mean()
    # print("This is not a proper data structure, or the timestamp is not a valid interval")
-
-
-'''Define Aggregation'''
-def agg_type(df):
-    df_avg = col_filter(avg_keys)
-    df_tot = col_filter(tot_keys)
-    df_max = col_filter(max_keys)
-    df_min = col_filter(min_keys)
-    df_vec = col_filter(vector_keys)
-    
-#average the columns from an hour ending format i.e 00:00 to 00:15 is the 00:15 data point
-    col = [col for col in df if any(key in col for key in (df_avg))]
-#    ic(df[col])
-
-#    timestamp= df["TIMESTAMP"]
-#    diff_check = timestamp.diff()
-#    fifteen_check = (dif_check == pd.Timedelta(15,'min')).head()
-#    if any(fifteen_check == True):
-#        print(check)
 
 
 '''Export the new time file'''
 def time_file():
     date = datetime.datetime.now()
-    styled_df = time_check(df)
-    styled_df.to_csv(date.strftime("%Y%m%d") + '-' + f"{file_path}", index=True)
+    items = time_change()
+    styled_df = items[0]
+    time = items[1]
+    styled_df.to_csv(date.strftime("%Y%m%d") + '-' f"{time}-min_{file_path}", index=True)
 
 if __name__ == '__main__':
     while True:
-   #     file_path = input("Enter the path to the CSV file (or 'exit' to quit): ")
-        file_path = ("Met.csv") 
+        file_path = input("Enter the path to the CSV file (or 'exit' to quit): ")
+   #     file_path = ("Met.csv") 
         if file_path == 'exit':
             print("Exiting the program.")
             sys.exit()
@@ -166,7 +128,7 @@ if __name__ == '__main__':
         else:
             print("This is not a CSV file. Please try again.")
 #    df = file_read(file_path)
-    file_read(file_path)
-    time_check() 
-    time_change() 
-#    time_file()
+#    file_read(file_path)
+#    col_filter() 
+#    time_change() 
+    time_file()
