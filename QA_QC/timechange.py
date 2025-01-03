@@ -1,7 +1,6 @@
 #!/home/thomas/myvenv/bin/python
 
 import sys 
-from keys import *
 import numpy as np
 import datetime
 import pandas as pd
@@ -33,10 +32,6 @@ def file_read(file_path):
 
 
 '''Define Timestamps'''
-
-'''The ultimate goal is to read the timestamp automatically, and give the user an option to choose the frequency that they would like the data to change to. I.E if the file is 15-min, then change it to 1-hour. Use ".resample().mean() for data that is an  "Avg" aggregation. You can specify closed="right" or "left" to make the data hour ending or hour beginig"'''
-
-
 def time_check():
     df = file_read(file_path)
 
@@ -51,29 +46,26 @@ def time_check():
 
     if time == fifteen_min:
         print(f"This is a 15-min file")
-    
+        time = 15 
     elif time == thirty_min:
         print(f"This is a 30-min file")
-
+        time = 30
     elif time == one_hour:
         print(f"This is a 60-min file")
-
+        time = 60
     elif time == one_day:
         print(f"This is a Daily file")
-
+        time = 1440
     elif time == five_min:
         print(f"This is a five-min file")
-
+        time = 5
     else:
         print(f"{time} is not a valid time interval")
+    return time 
 
 
-
-'''How do I handle columns that do not specify an aggregation? I.E EvapHr for Trench station. Should I enable the user to choose?'''
-
-'''SETUP: need to set up an check for user input incase something other than a time is entered. Possibly use a tkinter drop down??'''
 def time_change():
-    time_check()
+    check = time_check()
     df = file_read(file_path)
     df.set_index('TIMESTAMP', inplace=True)
     freq = [15, 30, 60, 1440]
@@ -81,7 +73,7 @@ def time_change():
     time = int(time)
     print(f"File will be converted to a {time}-min datafile")
     new_time = [item for item in freq if item == time]
-   
+
     #STILL NEED TO FIND A WAY TO HANDLE COLUMNS WIIHOUT OBVIOUS HEADERS. I.E EVAPHR OR SIMPLE NAMING CONVENTIONS LIKE PRECIP 
     avg_fil = df.filter(regex=r"vg$", axis=1)
     max_fil = df.filter(regex=r"ax$", axis=1)
@@ -90,31 +82,48 @@ def time_change():
     win_fil = df.filter(regex=r"^W.*(?<![n,x])$", axis=1)
     sig_fil = df.filter(regex=r"^S.*(?<![n,x,g])$", axis=1)
     col_order = df.columns 
-    freq = 'h'
-    if new_time[0] == int(60):
+#    check = time_check()
+    try:    
+        if time < check:
+            pass
+        elif new_time[0] == int(15):
+            freq = '15min'
+        elif new_time[0] == int(30):
+            freq = '30min'
+        elif new_time[0] == int(60):
+            freq = 'h'
+        elif new_time[0] == int(1440):
+            freq = 'd'
+        
         df_avg = avg_fil.resample((freq), closed='right', label='right').mean()
-        df_max = max_fil.resample('h', closed='right', label='right').mean()
-        df_min = min_fil.resample('h', closed='right', label='right').mean()
-        df_tot = tot_fil.resample('h', closed='right', label='right').sum()
-        df_win = win_fil.resample('h', closed='right', label='right').mean()
-        df_sig = sig_fil.resample('h', closed='right', label='right').mean()
+        df_max = max_fil.resample((freq), closed='right', label='right').mean()
+        df_min = min_fil.resample((freq), closed='right', label='right').mean()
+        df_win = win_fil.resample((freq), closed='right', label='right').mean()
+        df_sig = sig_fil.resample((freq), closed='right', label='right').mean()
+        df_tot = tot_fil.resample((freq), closed='right', label='right').sum()
         
         df_or  = pd.concat([df_avg,df_max,df_min,df_win,df_sig,df_tot], axis=1)
         df_reordered = df_or[col_order] 
         df_new = df_reordered.apply(lambda x: round(x,2))
+        df_new.dropna()
         print(df_new)
         return df_new, time
-    #    df_new = df.resample('h').mean()
-   # print("This is not a proper data structure, or the timestamp is not a valid interval")
 
+    except Exception as e:
+        print(f"Error occurred: {e}")
 
 '''Export the new time file'''
 def time_file():
     date = datetime.datetime.now()
     items = time_change()
-    styled_df = items[0]
-    time = items[1]
-    styled_df.to_csv(date.strftime("%Y%m%d") + '-' f"{time}-min_{file_path}", index=True)
+    try: 
+        styled_df = items[0]
+        time = items[1]
+        styled_df.to_csv(date.strftime("%Y%m%d") + '-' f"{time}-min_{file_path}", index=True)
+    
+    except Exception as e:
+        print(f"Error occurred: {e}")
+
 
 if __name__ == '__main__':
     while True:
