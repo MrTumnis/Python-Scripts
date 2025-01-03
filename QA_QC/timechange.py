@@ -19,8 +19,6 @@ def file_read(file_path):
         df1 = df1.to_frame()
         df = df.iloc[:,1:].astype(float)
         df_new = pd.concat([df1, df], axis=1)
-#        df.set_index('TIMESTAMP', inplace=True) 
-#        df.fillna(df.iloc[:,[0]], inplace=True)
         df.columns = df.columns.str.strip()
         return df_new
 
@@ -63,13 +61,15 @@ def time_check():
         print(f"{time} is not a valid time interval")
     return time 
 
-
+'''NEED TO RAISE ERROR FOR NON INT TYPE FOR INPUT'''
 def time_change():
     check = time_check()
     df = file_read(file_path)
     df.set_index('TIMESTAMP', inplace=True)
     freq = [15, 30, 60, 1440]
     time = input("What frequency would you like to change the file to? 15, 30, 60, 1440? ")
+ #   if time != type(int):
+ #       Raise
     time = int(time)
     print(f"File will be converted to a {time}-min datafile")
     new_time = [item for item in freq if item == time]
