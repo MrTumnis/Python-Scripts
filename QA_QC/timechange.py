@@ -131,7 +131,7 @@ def time_change():
             df_new = df_reor.apply(lambda x: round(x,2))
             return df_new, time
 
-"""lengthy way to handle columns not easily found via regex"""
+#lengthy way to handle columns not easily found via regex
         elif len(df_list) != len(df_or_list):
             df_list = list(set(df_list) ^ set(df_or_list))
             console.print(f"Rows [green]{df_list}[/green] were not recognized.", style='warning')
@@ -151,7 +151,7 @@ def time_change():
             df_sum = df[val_sum]
             df_cus = df_avg.resample((freq), closed='right', label='right').mean()
             df_cus = df_sum.resample((freq), closed='right', label='right').sum()
-            df1= pd.concat([df_or,df_cus,df_avg])
+            df1= pd.concat([df_or,df_cus,df_avg], axis=1)
             df_reor = df1[col_order]
             df_new = df_reor.apply(lambda x: round(x,2))
             ic(df_new)
