@@ -151,11 +151,11 @@ def time_change():
                 val_sum = [key for key, val in user_input.items() if val == 'sum']
                 df_avg = df[val_avg]
                 df_sum = df[val_sum]
-                df_cus = df_avg.resample((freq), closed='right', label='right').mean()
-                df_cus = df_sum.resample((freq), closed='right', label='right').sum()
-                df1= pd.concat([df_or,df_cus,df_avg], axis=1)
-                df_reor = df1[col_order]
-                df_new = df_reor.apply(lambda x: round(x,2))
+                df1 = df_avg.resample((freq), closed='right', label='right').mean()
+                df2 = df_sum.resample((freq), closed='right', label='right').sum()
+                df = pd.concat([df_or,df1,df2], axis=1)
+                df_reor = df[col_order]
+                df_new = df_reor.apply(lambda x: round(x,2))  #Could likely take a user input so that variables like Evap will be a more precise representation
                 return df_new, time 
         
     except Exception as e:
