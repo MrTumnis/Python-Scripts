@@ -12,6 +12,7 @@ from rich.prompt import Prompt
 
 custom_theme = Theme({
     "info": "dim cyan",
+    "success" : "dodger_blue2",
     "warning": "magenta",
     "error": "bold red"
 })
@@ -71,7 +72,6 @@ def time_check():
         raise Exception (f"{time} is not a valid time interval")
     return time 
 
-'''NEED TO RAISE ERROR FOR NON INT TYPE FOR INPUT'''
 def time_change():
     check = time_check()
     df = file_read(file_path)
@@ -88,7 +88,6 @@ def time_change():
         console.print(f"Please specify a valid time as an integer ({freq})", style='warning')
         time_file()
 
-    #STILL NEED TO FIND A WAY TO HANDLE COLUMNS WIIHOUT OBVIOUS HEADERS. I.E EVAPHR OR SIMPLE NAMING CONVENTIONS LIKE PRECIP 
     avg_fil = df.filter(regex=r"Avg$", axis=1)
     max_fil = df.filter(regex=r"Max$", axis=1)
     min_fil = df.filter(regex=r"Min$", axis=1)
@@ -108,7 +107,7 @@ def time_change():
             freq = 'h'
         elif new_time[0] == int(1440):
             freq = 'd'
-         
+     
     except Exception as e:
         console.print(f"#2 Error occurred: {e}", style='error')
         sys.exit()
@@ -119,50 +118,46 @@ def time_change():
     df_win = win_fil.resample((freq), closed='right', label='right').mean()
     df_sig = sig_fil.resample((freq), closed='right', label='right').mean()
     df_tot = tot_fil.resample((freq), closed='right', label='right').sum()
+    df_or = pd.concat([df_avg,df_max,df_min,df_win,df_sig,df_tot], axis=1)
         
     try: 
-        df_or = pd.concat([df_avg,df_max,df_min,df_win,df_sig,df_tot], axis=1)
+  #      df_or = pd.concat([df_avg,df_max,df_min,df_win,df_sig,df_tot], axis=1)
         df_list = df.columns.to_list()
         df_or_list = df_or.columns.to_list()
-        df_list.extend(df_or_list)
+     #   df_list.extend(df_or_list)
 
         if len(df_list) == len(df_or_list):
+            df_list.extend(df_or_list)
             df_reor = df_or[col_order] 
             df_new = df_reor.apply(lambda x: round(x,2))
             return df_new, time
 
-#lengthy way to handle columns not easily found via regex
-        elif len(df_list) != len(df_or_list):
-            df_list = list(set(df_list) ^ set(df_or_list))
-            console.print(f"Rows [green]{df_list}[/green] were not recognized.", style='warning')
-            user_input = {}
-            i = 0
-            while i < len(df_list): 
-                for item in df_list:
-                    input = Prompt.ask(f"What would you like to do for [bold green]{item}[/bold green]? Enter: Avg or Sum. ")
-                    value = input.lower()
-                    user_input.update({item:value})
-                    df_temp = df[item]
-                    df_new = pd.concat([df_temp])
-                    i+=1
-            val_avg = [key for key, val in user_input.items() if val == 'avg']
-            val_sum = [key for key, val in user_input.items() if val == 'sum']
-            df_avg = df[val_avg]
-            df_sum = df[val_sum]
-            df_cus = df_avg.resample((freq), closed='right', label='right').mean()
-            df_cus = df_sum.resample((freq), closed='right', label='right').sum()
-            df1= pd.concat([df_or,df_cus,df_avg], axis=1)
-            df_reor = df1[col_order]
-            df_new = df_reor.apply(lambda x: round(x,2))
-            ic(df_new)
-            return df_new, time 
+    #lengthy way to handle columns not easily found via regex
         else:
-            raise 
-            sys.exit() 
-       # console.print(f"Success! File has been converted to a {time}-min datafile", style='info')
-    
-        #return df_new, time
-
+            if len(df_list) != len(df_or_list):
+                df_list = list(set(df_list) ^ set(df_or_list))
+                console.print(f"Rows [green]{df_list}[/green] were not recognized.", style='warning')
+                user_input = {}
+                i = 0
+                while i < len(df_list): 
+                    for item in df_list:
+                        input = Prompt.ask(f"What would you like to do for [bold green]{item}[/bold green]? Enter: Avg or Sum. ")
+                        value = input.lower()
+                        user_input.update({item:value})
+                        df_temp = df[item]
+                        df_new = pd.concat([df_temp])
+                        i+=1
+                val_avg = [key for key, val in user_input.items() if val == 'avg']
+                val_sum = [key for key, val in user_input.items() if val == 'sum']
+                df_avg = df[val_avg]
+                df_sum = df[val_sum]
+                df_cus = df_avg.resample((freq), closed='right', label='right').mean()
+                df_cus = df_sum.resample((freq), closed='right', label='right').sum()
+                df1= pd.concat([df_or,df_cus,df_avg], axis=1)
+                df_reor = df1[col_order]
+                df_new = df_reor.apply(lambda x: round(x,2))
+                return df_new, time 
+        
     except Exception as e:
         console.print(f"#3 Error occurred: {e}", style='error')
         sys.exit()
@@ -176,7 +171,7 @@ def time_file():
         styled_df = items[0]
         time = items[1]
         styled_df.to_csv(date.strftime("%Y%m%d") + '-' f"{time}-min_{file_path}", index=True)
-        console.print(f"Success! File has been converted to a {time}-min datafile", style='info')
+        console.print(f"Success! File has been converted to a {time}-min datafile", style='success')
     
     except Exception as e:
         console.print(f"#4 Error occurred: {e}", style='error')
@@ -193,8 +188,5 @@ if __name__ == '__main__':
             break  
         else:
             console.print("This is not a CSV file. Please try again.", style='error')
-#    df = file_read(file_path)
-#    file_read(file_path)
-#    col_filter() 
-#    time_change() 
+
     time_file()
