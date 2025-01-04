@@ -69,7 +69,8 @@ def time_check():
             rprint(f"This is a five-min file")
             time = 5
     except:
-        raise Exception (f"{time} is not a valid time interval")
+        raise Exception (f"{time} is an unsupported valid time interval")
+
     return time 
 
 def time_change():
@@ -77,15 +78,20 @@ def time_change():
     df = file_read(file_path)
     df.set_index('TIMESTAMP', inplace=True)
     freq = [15, 30, 60, 1440]
+
     try:
         time = Prompt.ask("What frequency would you like to change the file to? [violet]15, 30, 60, 1440?[/violet] (or [red]'exit'[/red] to quit) ")
         if time == 'exit':
             sys.exit()
+
         time = int(time)
+
         if time < check:
             raise Exception ("Cannot convert to a time lower than that of the file") 
+
     except ValueError:
         console.print(f"Please specify a valid time as an integer ({freq})", style='warning')
+
         time_file()
 
     avg_fil = df.filter(regex=r"Avg$", axis=1)
@@ -95,7 +101,7 @@ def time_change():
     win_fil = df.filter(regex=r"^W.*(?<![n,x])$", axis=1)
     sig_fil = df.filter(regex=r"^S.*(?<![n,x,g])$", axis=1)
     col_order = df.columns 
-#    check = time_check()
+
     try:    
         new_time = [item for item in freq if item == time]
 
@@ -118,6 +124,7 @@ def time_change():
     df_win = win_fil.resample((freq), closed='right', label='right').mean()
     df_sig = sig_fil.resample((freq), closed='right', label='right').mean()
     df_tot = tot_fil.resample((freq), closed='right', label='right').sum()
+
     df_or = pd.concat([df_avg,df_max,df_min,df_win,df_sig,df_tot], axis=1)
         
     try: 
@@ -137,25 +144,40 @@ def time_change():
             if len(df_list) != len(df_or_list):
                 df_list = list(set(df_list) ^ set(df_or_list))
                 console.print(f"Rows [green]{df_list}[/green] were not recognized.", style='warning')
+                ag_list = ['avg', 'sum', 'min', 'max']
                 user_input = {}
+
                 i = 0
                 while i < len(df_list): 
                     for item in df_list:
-                        input = Prompt.ask(f"What would you like to do for [bold green]{item}[/bold green]? Enter: Avg or Sum. ")
+                        input = Prompt.ask(f"What would you like to do for [bold green]{item}[/bold green]? Enter: avg, sum, min, or max. ")
                         value = input.lower()
-                        user_input.update({item:value})
-                        df_temp = df[item]
-                        df_new = pd.concat([df_temp])
-                        i+=1
+
+                        if value in ag_list:
+                            user_input.update({item:value})
+                            df_temp = df[item]
+                            df_new = pd.concat([df_temp])
+                            i += 1
+
+                        else:
+                            raise Exception (f"'{value}' is not a proper input. Please enter a valid aggregation: '{ag_list}'")
+
                 val_avg = [key for key, val in user_input.items() if val == 'avg']
                 val_sum = [key for key, val in user_input.items() if val == 'sum']
+                val_min= [key for key, val in user_input.items() if val == 'min']
+                val_max= [key for key, val in user_input.items() if val == 'max']
                 df_avg = df[val_avg]
                 df_sum = df[val_sum]
+                df_min= df[val_min]
+                df_max= df[val_max]
                 df1 = df_avg.resample((freq), closed='right', label='right').mean()
                 df2 = df_sum.resample((freq), closed='right', label='right').sum()
-                df = pd.concat([df_or,df1,df2], axis=1)
+                df3 = df_min.resample((freq), closed='right', label='right').min()
+                df4 = df_max.resample((freq), closed='right', label='right').max()
+                df = pd.concat([df_or,df1,df2,df3,df4], axis=1)
                 df_reor = df[col_order]
-                df_new = df_reor.apply(lambda x: round(x,2))  #Could likely take a user input so that variables like Evap will be a more precise representation
+                df_new = df_reor.apply(lambda x: round(x,3))  #Could likely take a user input for the decimal so that variables like Evap will be a more precise representation
+
                 return df_new, time 
         
     except Exception as e:
@@ -166,6 +188,7 @@ def time_change():
 '''Export the new time file'''
 def time_file():
     date = datetime.datetime.now()
+
     try: 
         items = time_change()
         styled_df = items[0]
@@ -178,14 +201,17 @@ def time_file():
         sys.exit()
 
 if __name__ == '__main__':
+
     while True:
         file_path = Prompt.ask("Enter the path to the CSV file (or [red]'exit'[/red] to quit): ")
-   #     file_path = ("Met.csv") 
+
         if file_path == 'exit':
             rprint("Exiting the program.")
             sys.exit()
+
         elif file_path.endswith(".csv"):
             break  
+
         else:
             console.print("This is not a CSV file. Please try again.", style='error')
 
