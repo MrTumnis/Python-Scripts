@@ -5,7 +5,7 @@ import numpy as np
 import datetime
 import pandas as pd
 from icecream import ic
-from rich import print as rprint #***Used for a better looking and colorful output. I.E errors in cli
+from rich import print as rprint
 from rich.console import Console
 from rich.theme import Theme
 from rich.prompt import Prompt
@@ -128,10 +128,8 @@ def time_change():
     df_or = pd.concat([df_avg,df_max,df_min,df_win,df_sig,df_tot], axis=1)
         
     try: 
-  #      df_or = pd.concat([df_avg,df_max,df_min,df_win,df_sig,df_tot], axis=1)
         df_list = df.columns.to_list()
         df_or_list = df_or.columns.to_list()
-     #   df_list.extend(df_or_list)
 
         if len(df_list) == len(df_or_list):
             df_list.extend(df_or_list)
