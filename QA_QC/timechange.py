@@ -25,12 +25,15 @@ def file_read(file_path):
         for row in df.head(n=1).itertuples():
             if any(type(item) == type('float') for item in row):
                 df = df.drop(0)
-
+        for col in df.columns:
+            if col == 'STATION':
+                df = df.drop('STATION', axis=1)
         df1 = pd.to_datetime(df['TIMESTAMP'], errors='coerce')
         df1 = df1.to_frame()
         df = df.iloc[:,1:].astype(float)
         df_new = pd.concat([df1, df], axis=1)
         df.columns = df.columns.str.strip()
+
         return df_new
 
     except Exception as e:
@@ -52,25 +55,25 @@ def time_check():
     one_day = str('1 days 00:00:00')
 
     time = str(df['diff_check'].mode()[0]) 
-    try:
-        if time == fifteen_min:
-            rprint(f"This is a 15-min file")
-            time = 15 
-        elif time == thirty_min:
-            rprint(f"This is a 30-min file")
-            time = 30
-        elif time == one_hour:
-            rprint(f"This is a 60-min file")
-            time = 60
-        elif time == one_day:
-            rprint(f"This is a Daily file")
-            time = 1440
-        elif time == five_min:
-            rprint(f"This is a five-min file")
-            time = 5
-    except:
-        raise Exception (f"{time} is an unsupported valid time interval")
-
+#    try:
+    if time == fifteen_min:
+        rprint(f"This is a 15-min file")
+        time = 15 
+    elif time == thirty_min:
+        rprint(f"This is a 30-min file")
+        time = 30
+    elif time == one_hour:
+        rprint(f"This is a 60-min file")
+        time = 60
+    elif time == one_day:
+        rprint(f"This is a Daily file")
+        time = 1440
+    elif time == five_min:
+        rprint(f"This is a five-min file")
+        time = 5
+    else:
+        console.print (f"{time} is an unsupported time interval", style='error')
+        sys.exit()
     return time 
 
 def time_change():
