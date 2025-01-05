@@ -1,4 +1,4 @@
-#!/home/thomas/myvenv/bin/python
+#!/{HOME}/{USER}/myvenv/bin/python
 
 import sys 
 import numpy as np
@@ -55,7 +55,7 @@ def time_check():
     one_day = str('1 days 00:00:00')
 
     time = str(df['diff_check'].mode()[0]) 
-#    try:
+
     if time == fifteen_min:
         rprint(f"This is a 15-min file")
         time = 15 
