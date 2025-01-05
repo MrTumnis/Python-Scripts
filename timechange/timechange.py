@@ -1,4 +1,4 @@
-#!/{HOME}/{USER}/myvenv/bin/python
+#!/home/thomas/myvenv/bin/python
 
 import sys 
 import numpy as np
