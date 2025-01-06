@@ -1,4 +1,4 @@
-#!/home/thomas/myvenv/bin/python
+#!/{HOME}/{USER}/myenv/bin/python
 
 import sys 
 from keys import *
@@ -10,6 +10,16 @@ import pandas as pd
 from rich import print #***Used for a better looking and colorful output. I.E errors in cli
 from icecream import ic
 from functools import lru_cache
+from rich.console import Console
+from rich.theme import Theme
+from rich.prompt import Prompt
+
+custom_theme = Theme({
+    "info": "dim cyan",
+    "success" : "dodger_blue2",
+    "warning": "magenta",
+    "error": "bold red"
+})
 
 '''Wind Compass'''
 north   = [337.6, 22.5]
@@ -60,12 +70,7 @@ def col_filter(name_key,filter_key,non_key=None):
     return None 
 
 
-#def header_filter():
-    #retrieve the column name based on key words
-
-
 def cell_color(df, condition, color, col, col2=None):
- #   df = file_read(file_path)
 
     if isinstance(df, pd.DataFrame):
         df_style = pd.DataFrame('', index=df.index, columns=df.columns)  
@@ -101,24 +106,28 @@ def time_check():
    
         return df_new
 
-
+'''Each function needs a condition if it requires a colored cell for flagging'''
 def ws_check():
     df = file_read(file_path)
-    ws_header = col_filter(ws_keys, vector_keys)
+    ws_header_10m = col_filter(ws_keys, vector_keys, twenty_m_keys)
+    ws_header_20m = col_filter(ws_keys, vector_keys, ten_m_keys)
     wd_header = col_filter(wd_keys, vector_keys, sigma_keys)
    
     # Create a mask for ws_col where values are less than or equal to 0.5
-    zero_mask = (df[ws_header] <= 0.5) 
-    condition = pd.Series(False, index=df.index)  
-    
-    # Loop through the DataFrame, checking conditions on 4 rows
-    for i in range(len(df) - 1):  # May need to change to len(df) - 3 to avoid index out of bounds
-        if zero_mask[i:i + 3].all():  # Check if the first three values are all True
-            # Check if the wd column values are within ±(x) of each other for four consecutive rows
-            if (df[wd_header].iloc[i:i + 4].max() - df[wd_header].iloc[i:i + 4].min()) <= 3:
-                 condition[i:i + 4] = True  # Set condition for these four rows
-    return df.style.apply(lambda x: cell_color(x, condition, color='yellow', col=ws_header, col2=wd_header), axis=None)
+    zero_mask = (df[ws_header_10m] <= 0.5) 
+#    condition = pd.Series(False, index=df.index)  
+    try: 
+        # Loop through the DataFrame, checking conditions on 4 rows
+        for i in range(len(df) - 1):  # May need to change to len(df) - 3 to avoid index out of bounds
+            if zero_mask[i:i + 3].all():  # Check if the first three values are all True
+                # Check if the wd column values are within ±(x) of each other for four consecutive rows
+                if (df[wd_header].iloc[i:i + 4].max() - df[wd_header].iloc[i:i + 4].min()) <= 3:
+                     condition[i:i + 4] = True  # Set condition for these four rows
+        return df.style.apply(lambda x: cell_color(x, condition, color='yellow', col=ws_header, col2=wd_header), axis=None)
 
+    except Exception as e:
+        console.print(f"#1 Error occurred: {e}", style='error')
+    return None
 
 def wd_check():
     df = file_read(file_path)
@@ -158,14 +167,18 @@ def temp_check():
 
 '''Export the QA/QC file'''
 def QAQC_file():
-    date = datetime.datetime.now()
-    styled_df = wd_check()
-    styled_df.to_excel(date.strftime("%Y%m%d") + '-' + f"{file_path.strip('.csv')}" + '.xlsx', index=False)
+    try:
+        date = datetime.datetime.now()
+        styled_df = ws_check()
+        styled_df.to_excel(date.strftime("%Y%m%d") + '-' + f"{file_path.strip('.csv')}" + '.xlsx', index=False)
 
+    except Exception as e:
+        console.print(f"#1 Error occurred: {e}", style='error')
+    return None
 if __name__ == '__main__':
     while True:
-        file_path = input("Enter the path to the 15-min CSV file (or 'exit' to quit): ")
-
+      #  file_path = input("Enter the path to the 15-min CSV file (or 'exit' to quit): ")
+        file_path = 'Met.csv'
         if file_path == 'exit':
             print("Exiting the program.")
             sys.exit()

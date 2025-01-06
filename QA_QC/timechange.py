@@ -55,7 +55,7 @@ def time_check():
     one_day = str('1 days 00:00:00')
 
     time = str(df['diff_check'].mode()[0]) 
-#    try:
+
     if time == fifteen_min:
         rprint(f"This is a 15-min file")
         time = 15 
@@ -201,6 +201,7 @@ def time_file():
         console.print(f"#4 Error occurred: {e}", style='error')
         sys.exit()
 
+
 if __name__ == '__main__':
 
     while True:
@@ -215,5 +216,6 @@ if __name__ == '__main__':
 
         else:
             console.print("This is not a CSV file. Please try again.", style='error')
+
 
     time_file()
