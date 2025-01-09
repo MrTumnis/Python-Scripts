@@ -1,0 +1,5 @@
+A Script for password generation based on website name. 
+
+Ex. "GitHub" could parse the letters seperately, and run it through an algorithm that returns a password of song lyrics based on the letters of the website name.
+
+
