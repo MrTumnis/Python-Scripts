@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.theme import Theme
 from rich.prompt import Prompt
 
+
 custom_theme = Theme({
     "info": "dim cyan",
     "success" : "dodger_blue2",
@@ -23,7 +24,7 @@ def file_read(file_path):
     try:
         df = pd.read_csv(file_path)
         for row in df.head(n=1).itertuples():
-            if any(type(item) == type('float') for item in row):
+            if any(isinstance(item, float) for item in row):
                 df = df.drop(0)
         for col in df.columns:
             if col == 'STATION':
@@ -137,7 +138,7 @@ def time_change():
         if len(df_list) == len(df_or_list):
             df_list.extend(df_or_list)
             df_reor = df_or[col_order] 
-            df_new = df_reor.apply(lambda x: round(x,2))
+            df_new = df_reor.apply(lambda x: round(x,3))
             return df_new, time
 
     #lengthy way to handle columns not easily found via regex
