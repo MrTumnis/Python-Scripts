@@ -26,7 +26,7 @@ custom_theme = Theme({
 console = Console(theme=custom_theme)
 
 schema = {
-    'TIMESTAMP':'Datetime', 'VectorWindSpeed':'Float32', 'VectorWindDirection':'Int32', 'SpeedDirectionReliability':'Int32',
+    'VectorWindSpeed':'Float32', 'VectorWindDirection':'Int32', 'SpeedDirectionReliability':'Int32',
     'W_Speed':'Float32', 'W_Reliability':'Int32', 'W_Count':'Int32', 'W_StandardDeviation':'Float32', 'W_Amplitude':'Int32', 'W_Noise':'Int32', 'W_SNR':'Float32', 'W_ValidCount':'Int32',
     'V_Speed':'Float32', 'V_Reliability':'Int32', 'V_Count':'Int32', 'V_StandardDeviation':'Float32', 'V_Amplitude':'Int32', 'V_Noise':'Int32', 'V_SNR':'Float32', 'V_ValidCount':'Int32',
     'U_Speed':'Float3', 'U_Reliability':'Int32','U_Count':'Int32', 'U_StandardDeviation':'Float32', 'U_Amplitude':'Int32', 'U_Noise':'Int32', 'U_SNR':'Float32', 'U_ValidCount':'Int32'
@@ -34,22 +34,24 @@ schema = {
 
 
 def read_file(file_path):
-    schema = {
-        'TIMESTAMP':'Datetime', 'VectorWindSpeed':'Float32', 'VectorWindDirection':'Int32', 'SpeedDirectionReliability':'Int32',
-        'W_Speed':'Float32', 'W_Reliability':'Int32', 'W_Count':'Int32', 'W_StandardDeviation':'Float32', 'W_Amplitude':'Int32', 'W_Noise':'Int32', 'W_SNR':'Float32', 'W_ValidCount':'Int32',
-        'V_Speed':'Float32', 'V_Reliability':'Int32', 'V_Count':'Int32', 'V_StandardDeviation':'Float32', 'V_Amplitude':'Int32', 'V_Noise':'Int32', 'V_SNR':'Float32', 'V_ValidCount':'Int32',
-        'U_Speed':'Float3', 'U_Reliability':'Int32','U_Count':'Int32', 'U_StandardDeviation':'Float32', 'U_Amplitude':'Int32', 'U_Noise':'Int32', 'U_SNR':'Float32', 'U_ValidCount':'Int32'
-    }
-
 #    try:
        # file_lf = pl.scan_csv(file_path, has_header=True,try_parse_dates=True, skip_rows_after_header=1).collect()
         #ic(file_lf)
-    df = pl.read_csv(file_path, schema=schema)#, dtype_backend='pyarrow')
-    ic(df)
+    df = pl.read_csv(file_path)
     # Drop first row due to string type 
     index = [0]
     df = df.filter(~pl.Series(range(len(df))).is_in(index))
-    ic(df)
+#    df = df.select(
+#        pl.col('TIMESTAMP').str
+#        .extract("(....-..-.. ..:..:..)", 1)
+#        .alias("TIMESTAMP2")
+#        .str.to_datetime("%Y-%m-%d %H:%M:%S")
+#    )
+    df = df.with_columns(
+        pl.col('TIMESTAMP').str.to_datetime("%Y-%m-%d %H:%M:%S",strict=True)
+    )
+    df.cast(schema, strict=False)
+    ic('new',df)
 
     return df 
 
