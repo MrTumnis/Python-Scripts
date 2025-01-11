@@ -25,39 +25,52 @@ custom_theme = Theme({
 
 console = Console(theme=custom_theme)
 
+
 schema = {
-    'VectorWindSpeed':'Float32', 'VectorWindDirection':'Int32', 'SpeedDirectionReliability':'Int32',
-    'W_Speed':'Float32', 'W_Reliability':'Int32', 'W_Count':'Int32', 'W_StandardDeviation':'Float32', 'W_Amplitude':'Int32', 'W_Noise':'Int32', 'W_SNR':'Float32', 'W_ValidCount':'Int32',
-    'V_Speed':'Float32', 'V_Reliability':'Int32', 'V_Count':'Int32', 'V_StandardDeviation':'Float32', 'V_Amplitude':'Int32', 'V_Noise':'Int32', 'V_SNR':'Float32', 'V_ValidCount':'Int32',
-    'U_Speed':'Float3', 'U_Reliability':'Int32','U_Count':'Int32', 'U_StandardDeviation':'Float32', 'U_Amplitude':'Int32', 'U_Noise':'Int32', 'U_SNR':'Float32', 'U_ValidCount':'Int32'
+    'TIMESTAMP':pl.Datetime ,'VectorWindSpeed':pl.Float32, 'VectorWindDirection':pl.Int32, 'SpeedDirectionReliability':pl.Int32,
+    'W_Speed':pl.Float32, 'W_Reliability':pl.Int32, 'W_Count':pl.Int32, 'W_StandardDeviation':pl.Float32,
+    'W_Amplitude':pl.Int32, 'W_Noise':pl.Int32, 'W_SNR':pl.Float32, 'W_ValidCount':pl.Int32,
+    'V_Speed':pl.Float32, 'V_Reliability':pl.Int32, 'V_Count':pl.Int32, 'V_StandardDeviation':pl.Float32,
+    'V_Amplitude':pl.Float32, 'V_Noise':pl.Int32, 'V_SNR':pl.Float32, 'V_ValidCount':pl.Int32,
+    'U_Speed':pl.Float32, 'U_Reliability':pl.Int32,'U_Count':pl.Int32, 'U_StandardDeviation':pl.Float32,
+    'U_Amplitude':pl.Int32, 'U_Noise':pl.Int32, 'U_SNR':pl.Float32, 'U_ValidCount':pl.Int32
 }
+
+# Read the csv file and change the data columns to the proper data types
+def read_file_batch(file_path):
+     null = ['TIMESTAMP', 'm/s', '\u00B0', ""]
+     lf =(
+        pl
+        .scan_csv(file_path, has_header=True, null_values=null, raise_if_empty=True)
+        .with_columns(pl.col('TIMESTAMP').str.to_datetime('%Y-%m-%d %H:%M:%S', strict=False))
+        .cast(schema, strict=True)
+   #     .select(['VectorWindSpeed', 'VectorWindDirection'])
+    #    .sort('TIMESTAMP', descending=True)
+     #   .limit(10)
+    )
+
+    # Execute the query and collect the results
+     final_df = lf.collect()
+     ic(final_df)   
+     return final_df
 
 
 def read_file(file_path):
-#    try:
-       # file_lf = pl.scan_csv(file_path, has_header=True,try_parse_dates=True, skip_rows_after_header=1).collect()
-        #ic(file_lf)
-    df = pl.read_csv(file_path)
-    # Drop first row due to string type 
-    index = [0]
-    df = df.filter(~pl.Series(range(len(df))).is_in(index))
-#    df = df.select(
-#        pl.col('TIMESTAMP').str
-#        .extract("(....-..-.. ..:..:..)", 1)
-#        .alias("TIMESTAMP2")
-#        .str.to_datetime("%Y-%m-%d %H:%M:%S")
-#    )
-    df = df.with_columns(
-        pl.col('TIMESTAMP').str.to_datetime("%Y-%m-%d %H:%M:%S",strict=True)
-    )
-    df.cast(schema, strict=False)
-    ic('new',df)
+    try:
+        df = pl.read_csv(file_path, infer_schema=False)
+        # Drop first row due to string type 
+        index = [0]
+        df = df.filter(~pl.Series(range(len(df))).is_in(index))
+    # Needed as polars will not recognize datetime and will fill with 'null'
+        df = df.with_columns(
+            pl.col('TIMESTAMP').str.to_datetime("%Y-%m-%d %H:%M:%S",strict=True)
+       ).cast(schema, strict=False)
 
-    return df 
+        return df 
 
-#    except Exception as e:
-#        console.print(f"#1 Error occurred: {e}", style='error')
-#    return None
+    except Exception as e:
+        console.print(f"#1 Error occurred: {e}", style='error')
+    return None
 
 #return the proper interval and check for missing data
 def time_check():
@@ -78,11 +91,11 @@ def time_check():
 
 
 def test():
-    read_file(file)
+    df = read_file_batch(file)
   #  df = time_check()
 #    df1 = pd.read_csv(file, dtype_backend='pyarrow')
  #   rprint("time",df)
-    return None
+    return df 
     
 
 def QAQC_file(file):
@@ -90,7 +103,8 @@ def QAQC_file(file):
     date = datetime.datetime.now()
     styled_df = test()
     ic(styled_df)
-    styled_df.write_excel(date.strftime("%Y%m%d") + '-' + f"{file.strip('.csv')}" + '.xlsx')
+   # styled_df.write_excel(date.strftime("%Y%m%d") + '-' + f"{file.strip('.csv')}" + '.xlsx')
+    styled_df.write_excel(date.strftime("%Y%m%d") + '-' + 'SODAR_df' + '.xlsx')
 
 #    except Exception as e:
 #        console.print(f"#1 Error occurred: {e}", style='error')
@@ -99,7 +113,7 @@ def QAQC_file(file):
 if __name__ == '__main__': 
     
 #file = input("What is the path to the .csv file ")
-    file = 'SODAR.csv'
+    file = 'SODAR_data/Wauna_SODAR*'
     QAQC_file(file)
 #    file_scan(file)
 #    file_read(file)
