@@ -40,11 +40,6 @@ columns = {
 }
 
 
-#lazy_dic = {'30':'','35':'','40':'','45':'','50':'','55':'',
-#          '60':'','65':'','70':'','75':'','80':'','85':'',
-#          '90':'','95':'','100':'','105':'','110':'','115':'',
-#          '120':'','125':'','130':'','135':'','140':''}
-
 #Return all lazy files in a dictionary for easy reference  
 def file_path(lf=None):
     global null_items
@@ -65,7 +60,7 @@ def file_path(lf=None):
         )
         lazy_dic.update({h:file})
 
-    #Return a single csv file based on height of readings
+    #Return a single csv file based on height of data recordings 
     if lf is not None:
         lf = lazy_dic[lf]
         return lf 
@@ -75,7 +70,7 @@ def file_path(lf=None):
         return lazy_dic
 
 
-# Read the csv files into one dataframe using glob and change the data columns to the proper data types
+# Read the csv files into one lazy dataframe using glob 
 def read_file_batch():
      file_path = './SODAR_data/Wauna_SODAR*'
      global null_items
@@ -94,11 +89,20 @@ def read_file_batch():
      ic(df)   
      return df
 
-
+'''can possibly ".join()" the lazy frames, and use the "left"/"right" column names to get the adjacent columns '''
 def component_speed_profile_check():
+    global columns
     lf_dic = file_path() 
-    lf_30 = lf_dic['90'] 
-    ic(lf_30.collect())
+#    lf1 = lf_dic['30'].with_columns(pl.col('W_Speed').abs()) 
+#    lf2 = lf_dic['40'].with_columns(pl.col('W_Speed').abs())
+    lf1 = lf_dic['30'].select(pl.col('W_Speed')) 
+    lf2 = lf_dic['40'].select(pl.col('W_Speed'))
+#    df = lf1.join(lf2, on="W_Speed")
+    df = pl.concat([lf1,lf2], how='horizontal')
+    ic(df.collect())
+#    df = lf_levels.with_column(pl.col('W_Speed')).alias('New')
+
+
 
 
 
