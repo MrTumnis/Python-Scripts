@@ -16,17 +16,8 @@ from rich.traceback import install
 
 install()
 
-custom_theme = Theme({
-    "info": "dim cyan",
-    "success" : "dodger_blue2",
-    "warning": "magenta",
-    "error": "bold red"
-})
 
-console = Console(theme=custom_theme)
-
-
-null = ['TIMESTAMP', 'm/s', '\u00B0', ""]
+null_items = ['TIMESTAMP', 'm/s', '\u00B0', ""]
 
 schema = {
     'TIMESTAMP':pl.Datetime ,'VectorWindSpeed':pl.Float32, 'VectorWindDirection':pl.Int32, 'SpeedDirectionReliability':pl.Int32,
@@ -49,36 +40,48 @@ columns = {
 }
 
 
-#Return all lazy files in a dictionary for easy reference  
-def file_path(lf):
-    global null
+#lazy_dic = {'30':'','35':'','40':'','45':'','50':'','55':'',
+#          '60':'','65':'','70':'','75':'','80':'','85':'',
+#          '90':'','95':'','100':'','105':'','110':'','115':'',
+#          '120':'','125':'','130':'','135':'','140':''}
 
-    lazy_frame = {'30':'','35':'','40':'','45':'','50':'','55':'',
+#Return all lazy files in a dictionary for easy reference  
+def file_path(lf=None):
+    global null_items
+
+    lazy_dic = {'30':'','35':'','40':'','45':'','50':'','55':'',
               '60':'','65':'','70':'','75':'','80':'','85':'',
               '90':'','95':'','100':'','105':'','110':'','115':'',
               '120':'','125':'','130':'','135':'','140':''}
 
-    for h in lazy_frame.keys():
+    for h in lazy_dic.keys():
         file = (
             pl
-            .scan_csv(f'SODAR_data/Wauna_SODAR{h}_Table15.csv', has_header=True, null_values=null, raise_if_empty=True)
+            .scan_csv(f'SODAR_data/Wauna_SODAR{h}_Table15.csv', has_header=True, null_values=null_items, raise_if_empty=True)
             .with_columns(
                 pl
                 .col('TIMESTAMP').str
                 .to_datetime('%Y-%m-%d %H:%M:%S', strict=False))
         )
-        lazy_frame.update({h:file})
-    ic(lazy_frame[lf].collect())
-    return 
+        lazy_dic.update({h:file})
+
+    #Return a single csv file based on height of readings
+    if lf is not None:
+        lf = lazy_dic[lf]
+        return lf 
+
+    #Return all files in a dictionary
+    else:
+        return lazy_dic
 
 
 # Read the csv files into one dataframe using glob and change the data columns to the proper data types
 def read_file_batch():
      file_path = './SODAR_data/Wauna_SODAR*'
-     global null
+     global null_items
      lf =(
         pl
-        .scan_csv(file_path, has_header=True, null_values=null, raise_if_empty=True)
+        .scan_csv(file_path, has_header=True, null_values=null_items, raise_if_empty=True)
         .with_columns(
             pl
             .col('TIMESTAMP').str
@@ -86,48 +89,34 @@ def read_file_batch():
         .cast(schema, strict=True)
     )
 
-    # Execute the query and collect the results
+     # Execute the query and collect the results
      df = lf.collect()
      ic(df)   
      return df
 
-#return full dataframe with proper schema
-def read_file(file_path):
-    try:
-        df = pl.read_csv(file_path, infer_schema=False)
-        # Drop first row due to string type 
-        index = [0]
-        df = df.filter(~pl.Series(range(len(df))).is_in(index))
-        # Needed as polars will not recognize datetime and will fill with 'null'
-        df = df.with_columns(
-            pl.col('TIMESTAMP').str.to_datetime("%Y-%m-%d %H:%M:%S",strict=True)
-       ).cast(schema, strict=False)
-
-        return df 
-
-    except Exception as e:
-        console.print(f"#1 Error occurred: {e}", style='error')
-    return None
-
 
 def component_speed_profile_check():
-    lf = file_path() 
-    ic(type(lf))
-    
+    lf_dic = file_path() 
+    lf_30 = lf_dic['90'] 
+    ic(lf_30.collect())
 
-    lf = lf.with_columns(pl.col('W_Speed')
-                                 )
 
-    lf = lf.collect() 
-    ic(lf)
-     
 
-    return lf
+#    lf_list = []
+# for key, value in lf_dic.items():
+#    for i in range(30,141,5):      
+#        lf_list.append(f'lf_{i}')    
+#    for key, value in lf_dic.items():
+#        for idx, i in enumerate(lf_list):
+#            ic(idx,i)
+#            i = lf_dic[key]
+
 
 
 def test():
-    file_path('80')
-  #  df = component_speed_profile_check()
+   # df = file_path('80')
+   # ic(df.collect())
+    df = component_speed_profile_check()
   #  df = read_file_batch()
 #    df1 = pd.read_csv(file, dtype_backend='pyarrow')
  #   rprint("time",df)
