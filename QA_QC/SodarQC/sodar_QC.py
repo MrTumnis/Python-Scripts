@@ -26,6 +26,8 @@ custom_theme = Theme({
 console = Console(theme=custom_theme)
 
 
+null = ['TIMESTAMP', 'm/s', '\u00B0', ""]
+
 schema = {
     'TIMESTAMP':pl.Datetime ,'VectorWindSpeed':pl.Float32, 'VectorWindDirection':pl.Int32, 'SpeedDirectionReliability':pl.Int32,
     'W_Speed':pl.Float32, 'W_Reliability':pl.Int32, 'W_Count':pl.Int32, 'W_StandardDeviation':pl.Float32,
@@ -36,32 +38,67 @@ schema = {
     'U_Amplitude':pl.Int32, 'U_Noise':pl.Int32, 'U_SNR':pl.Float32, 'U_ValidCount':pl.Int32
 }
 
-# Read the csv file and change the data columns to the proper data types
-def read_file_batch(file_path):
-     null = ['TIMESTAMP', 'm/s', '\u00B0', ""]
+columns = {
+    'time':'TIMESTAMP', 'vec_ws':'VectorWindSpeed', 'vec_wd':'VectorWindDirection', 'sdir_rel':'SpeedDirectionReliability',
+    'w_spd':'W_Speed', 'w_rel':'W_Reliability', 'w_cnt':'W_Count', 'w_std':'W_StandardDeviation',
+    'w_amp':'W_Amplitude', 'w_n':'W_Noise', 'w_snr':'W_SNR', 'w_valcnt':'W_ValidCount',
+    'v_spd':'V_Speed', 'v_rel':'V_Reliability', 'v_cnt':'V_Count', 'v_snd':'V_StandardDeviation',
+    'v_amp':'V_Amplitude', 'v_n':'V_Noise', 'v_snr':'V_SNR', 'v_valcnt':'V_ValidCount',
+    'u_spd':'U_Speed', 'u_rel':'U_Reliability', 'u_cnt':'U_Count', 'u_std':'U_StandardDeviation',
+    'u_amp':'U_Amplitude', 'u_n':'U_Noise', 'u_snr':'U_SNR', 'u_valcnt':'U_ValidCount'
+}
+
+
+#Return all lazy files in a dictionary for easy reference  
+def file_path(lf):
+    global null
+
+    lazy_frame = {'30':'','35':'','40':'','45':'','50':'','55':'',
+              '60':'','65':'','70':'','75':'','80':'','85':'',
+              '90':'','95':'','100':'','105':'','110':'','115':'',
+              '120':'','125':'','130':'','135':'','140':''}
+
+    for h in lazy_frame.keys():
+        file = (
+            pl
+            .scan_csv(f'SODAR_data/Wauna_SODAR{h}_Table15.csv', has_header=True, null_values=null, raise_if_empty=True)
+            .with_columns(
+                pl
+                .col('TIMESTAMP').str
+                .to_datetime('%Y-%m-%d %H:%M:%S', strict=False))
+        )
+        lazy_frame.update({h:file})
+    ic(lazy_frame[lf].collect())
+    return 
+
+
+# Read the csv files into one dataframe using glob and change the data columns to the proper data types
+def read_file_batch():
+     file_path = './SODAR_data/Wauna_SODAR*'
+     global null
      lf =(
         pl
         .scan_csv(file_path, has_header=True, null_values=null, raise_if_empty=True)
-        .with_columns(pl.col('TIMESTAMP').str.to_datetime('%Y-%m-%d %H:%M:%S', strict=False))
+        .with_columns(
+            pl
+            .col('TIMESTAMP').str
+            .to_datetime('%Y-%m-%d %H:%M:%S', strict=False))
         .cast(schema, strict=True)
-   #     .select(['VectorWindSpeed', 'VectorWindDirection'])
-    #    .sort('TIMESTAMP', descending=True)
-     #   .limit(10)
     )
 
     # Execute the query and collect the results
-     final_df = lf.collect()
-     ic(final_df)   
-     return final_df
+     df = lf.collect()
+     ic(df)   
+     return df
 
-
+#return full dataframe with proper schema
 def read_file(file_path):
     try:
         df = pl.read_csv(file_path, infer_schema=False)
         # Drop first row due to string type 
         index = [0]
         df = df.filter(~pl.Series(range(len(df))).is_in(index))
-    # Needed as polars will not recognize datetime and will fill with 'null'
+        # Needed as polars will not recognize datetime and will fill with 'null'
         df = df.with_columns(
             pl.col('TIMESTAMP').str.to_datetime("%Y-%m-%d %H:%M:%S",strict=True)
        ).cast(schema, strict=False)
@@ -72,39 +109,38 @@ def read_file(file_path):
         console.print(f"#1 Error occurred: {e}", style='error')
     return None
 
-#return the proper interval and check for missing data
-def time_check():
-    df = read_file(file)
-    ic(type(df))
-    #    df = pl.DataFrame(df).lazy()
-    df = df.upsample(time='TIMESTAMP', every='15m')
-    df = pl.from_pandas(df).lazy()
-    df = df.fill_null(9999)
-    null = df.select(pl.col('TIMESTAMP').null_count())
-    null_pos = df.filter(pl.col('TIMESTAMP').is_null()).collect()
-    ic(null)
-    ic(null_pos)
+
+def component_speed_profile_check():
+    lf = file_path() 
+    ic(type(lf))
     
 
-    return df
+    lf = lf.with_columns(pl.col('W_Speed')
+                                 )
 
+    lf = lf.collect() 
+    ic(lf)
+     
+
+    return lf
 
 
 def test():
-    df = read_file_batch(file)
-  #  df = time_check()
+    file_path('80')
+  #  df = component_speed_profile_check()
+  #  df = read_file_batch()
 #    df1 = pd.read_csv(file, dtype_backend='pyarrow')
  #   rprint("time",df)
-    return df 
+    return None 
     
 
-def QAQC_file(file):
+def QAQC_file():
  #   try:
     date = datetime.datetime.now()
     styled_df = test()
     ic(styled_df)
-   # styled_df.write_excel(date.strftime("%Y%m%d") + '-' + f"{file.strip('.csv')}" + '.xlsx')
-    styled_df.write_excel(date.strftime("%Y%m%d") + '-' + 'SODAR_df' + '.xlsx')
+    styled_df.write_csv(date.strftime("%Y%m%d %H%m%s") + '-' + 'SODAR_QA-QC' + '.csv', include_header=True)
+   # styled_df.write_excel(date.strftime("%Y%m%d") + '-' + 'SODAR_df' + '.xlsx')
 
 #    except Exception as e:
 #        console.print(f"#1 Error occurred: {e}", style='error')
@@ -113,7 +149,6 @@ def QAQC_file(file):
 if __name__ == '__main__': 
     
 #file = input("What is the path to the .csv file ")
-    file = 'SODAR_data/Wauna_SODAR*'
-    QAQC_file(file)
+    QAQC_file()
 #    file_scan(file)
 #    file_read(file)
