@@ -6,9 +6,8 @@ import pandas as pd
 import pyarrow as pa
 import sys 
 import datetime
-from xlsxwriter import Workbook
 from icecream import ic
-from rich import print as rprint
+from rich import print as print
 from rich.console import Console
 from rich.theme import Theme
 from rich.prompt import Prompt
@@ -29,14 +28,15 @@ schema = {
     'U_Amplitude':pl.Int32, 'U_Noise':pl.Int32, 'U_SNR':pl.Float32, 'U_ValidCount':pl.Int32
 }
 
+
 columns = {
-    'time':'TIMESTAMP', 'vec_ws':'VectorWindSpeed', 'vec_wd':'VectorWindDirection', 'sdir_rel':'SpeedDirectionReliability',
-    'w_spd':'W_Speed', 'w_rel':'W_Reliability', 'w_cnt':'W_Count', 'w_std':'W_StandardDeviation',
-    'w_amp':'W_Amplitude', 'w_n':'W_Noise', 'w_snr':'W_SNR', 'w_valcnt':'W_ValidCount',
-    'v_spd':'V_Speed', 'v_rel':'V_Reliability', 'v_cnt':'V_Count', 'v_snd':'V_StandardDeviation',
-    'v_amp':'V_Amplitude', 'v_n':'V_Noise', 'v_snr':'V_SNR', 'v_valcnt':'V_ValidCount',
-    'u_spd':'U_Speed', 'u_rel':'U_Reliability', 'u_cnt':'U_Count', 'u_std':'U_StandardDeviation',
-    'u_amp':'U_Amplitude', 'u_n':'U_Noise', 'u_snr':'U_SNR', 'u_valcnt':'U_ValidCount'
+    'TIMESTAMP':'','VectorWindSpeed':'','VectorWindDirection':'','SpeedDirectionReliability':'',
+    'W_Speed':'','W_Reliability':'', 'W_Count':'','W_StandardDeviation':'',
+    'W_Amplitude':'','W_Noise':'','W_SNR':'','W_ValidCount':'',
+    'V_Speed':'','V_Reliability':'','V_Count':'','V_StandardDeviation':'',
+    'V_Amplitude':'','V_Noise':'','V_SNR':'','V_ValidCount':'',
+    'U_Speed':'','U_Reliability':'','U_Count':'','U_StandardDeviation':'',
+    'U_Amplitude':'','U_Noise':'','U_SNR':'','U_ValidCount':''
 }
 
 
@@ -76,24 +76,12 @@ def read_file(height=None):
     else:
         return lazy_dic
 
-def lf_merge_2():
-    df_dic = read_file()
-    df_list = [df_dic[str(i)] for i in range(35, 141, 5)]  
-    ic(df_list)
-    df = df_dic['30']  
-    
-    for i in range(35, 141, 5):  
-        for item in df_list:
-            df = df.join(item, on='TIMESTAMP', how='inner')  
-    
-    return df
-
+'''Merge dataframes with a single header'''
 def lf_merge():
     df_dic = read_file()  
     df_list = []
     for i in range(35,141,5):
        df_list.append(df_dic[str(i)])
-    ic(df_list)
     df = df_dic['30']
     i = 35
     while i < 140:
@@ -102,11 +90,34 @@ def lf_merge():
             i+=5
     return df
 
-def component_speed_profile_check():
-    global columns
-    lf_dic = read_file() 
 
-#    df = lf_levels.with_column(pl.col('W_Speed')).alias('New')
+
+'''Begin Quality Checks'''
+#compare vertical('W') and horizontal('U/V')  wind speed at adjacent levels 
+def component_speed_profile_check():
+    lf = lf_merge().lazy() 
+    
+    for r in range(35,136,5):
+        adj_dic = {} 
+        adj_dic.update({r:r+5})
+        ic(adj_dic.items())
+    i = 30
+    while i < 140:
+        for key,items in adj_dic.items():     
+            ic(key)
+            for value in adj_dic.values():
+                ic(value)
+                df_pairs = []
+                ver_ws = lf.select(cs.by_name(f'W_Speed_{key}',f'W_Speed_{value}'))
+                df_pairs.append(ver_ws)
+                i+=5
+     #   for l in df_pairs:
+      #      ic(l.collect())
+    
+      #  ver_ws = lf.select(cs.by_name(f'W_Speed_{key}',f'W_Speed_{value}'))
+    #$ver_ws = lf.select(cs.matches('^W_Sp.{2}'))
+    ic(ver_ws.collect())
+    return lf
 
 
 
@@ -124,8 +135,7 @@ def component_speed_profile_check():
 
 
 def test():
-    df = lf_merge() 
- #   df = component_speed_profile_check()
+    df = component_speed_profile_check()
   #  df = read_file_batch()
 #    df1 = pd.read_csv(file, dtype_backend='pyarrow')
  #   rprint("time",df)
