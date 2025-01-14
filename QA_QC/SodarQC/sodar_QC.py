@@ -41,7 +41,7 @@ columns = {
 
 
 #Return all lazy files in a dictionary for easy reference  
-def file_path(lf=None):
+def read_file(height=None):
     global null_items
 
     lazy_dic = {'30':'','35':'','40':'','45':'','50':'','55':'',
@@ -60,46 +60,52 @@ def file_path(lf=None):
         )
         lazy_dic.update({h:file})
 
-    #Return a single csv file based on height of data recordings 
-    if lf is not None:
-        lf = lazy_dic[lf]
+    '''Map the file height to the column names'''
+    for key, value in lazy_dic.items():
+        lf = lazy_dic[key]
+        lf1 = lf.rename(lambda column_name:column_name[0:] + '_' + f'{key}')
+        lf = lf1.rename({f'TIMESTAMP_{key}':'TIMESTAMP'}).collect()
+        lazy_dic.update({key:lf})
+
+    #Return a single lazy frame based on height of data recordings 
+    if height is not None:
+        lf = lazy_dic[height]
         return lf 
 
     #Return all files in a dictionary
     else:
         return lazy_dic
 
+def lf_merge_2():
+    df_dic = read_file()
+    df_list = [df_dic[str(i)] for i in range(35, 141, 5)]  
+    ic(df_list)
+    df = df_dic['30']  
+    
+    for i in range(35, 141, 5):  
+        for item in df_list:
+            df = df.join(item, on='TIMESTAMP', how='inner')  
+    
+    return df
 
-# Read the csv files into one lazy dataframe using glob 
-def read_file_batch():
-     file_path = './SODAR_data/Wauna_SODAR*'
-     global null_items
-     lf =(
-        pl
-        .scan_csv(file_path, has_header=True, null_values=null_items, raise_if_empty=True)
-        .with_columns(
-            pl
-            .col('TIMESTAMP').str
-            .to_datetime('%Y-%m-%d %H:%M:%S', strict=False))
-        .cast(schema, strict=True)
-    )
+def lf_merge():
+    df_dic = read_file()  
+    df_list = []
+    for i in range(35,141,5):
+       df_list.append(df_dic[str(i)])
+    ic(df_list)
+    df = df_dic['30']
+    i = 35
+    while i < 140:
+        for item in df_list:
+            df = df.join(item, on='TIMESTAMP', how='inner') 
+            i+=5
+    return df
 
-     # Execute the query and collect the results
-     df = lf.collect()
-     ic(df)   
-     return df
-
-'''can possibly ".join()" the lazy frames, and use the "left"/"right" column names to get the adjacent columns '''
 def component_speed_profile_check():
     global columns
-    lf_dic = file_path() 
-#    lf1 = lf_dic['30'].with_columns(pl.col('W_Speed').abs()) 
-#    lf2 = lf_dic['40'].with_columns(pl.col('W_Speed').abs())
-    lf1 = lf_dic['30'].select(pl.col('W_Speed')) 
-    lf2 = lf_dic['40'].select(pl.col('W_Speed'))
-#    df = lf1.join(lf2, on="W_Speed")
-    df = pl.concat([lf1,lf2], how='horizontal')
-    ic(df.collect())
+    lf_dic = read_file() 
+
 #    df = lf_levels.with_column(pl.col('W_Speed')).alias('New')
 
 
@@ -118,21 +124,19 @@ def component_speed_profile_check():
 
 
 def test():
-   # df = file_path('80')
-   # ic(df.collect())
-    df = component_speed_profile_check()
+    df = lf_merge() 
+ #   df = component_speed_profile_check()
   #  df = read_file_batch()
 #    df1 = pd.read_csv(file, dtype_backend='pyarrow')
  #   rprint("time",df)
-    return None 
+    return df 
     
 
 def QAQC_file():
  #   try:
     date = datetime.datetime.now()
     styled_df = test()
-    ic(styled_df)
-    styled_df.write_csv(date.strftime("%Y%m%d %H%m%s") + '-' + 'SODAR_QA-QC' + '.csv', include_header=True)
+    styled_df.write_csv(date.strftime("%Y%m%d") + '-' + 'SODAR_QA-QC' + '.csv', include_header=True)
    # styled_df.write_excel(date.strftime("%Y%m%d") + '-' + 'SODAR_df' + '.xlsx')
 
 #    except Exception as e:
@@ -142,6 +146,6 @@ def QAQC_file():
 if __name__ == '__main__': 
     
 #file = input("What is the path to the .csv file ")
-    QAQC_file()
+     QAQC_file()
 #    file_scan(file)
 #    file_read(file)
