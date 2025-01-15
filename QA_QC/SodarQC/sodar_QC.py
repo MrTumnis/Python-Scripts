@@ -40,7 +40,7 @@ columns = {
 }
 
 
-#Return all lazy files in a dictionary for easy reference  
+#Return all lazy files in a dictionary for easy reference and append height of each range gate to column name 
 def read_file(height=None):
     global null_items
 
@@ -60,7 +60,7 @@ def read_file(height=None):
         )
         lazy_dic.update({h:file})
 
-    '''Map the file height to the column names'''
+    '''Append the file height to the column names'''
     for key, value in lazy_dic.items():
         lf = lazy_dic[key]
         lf1 = lf.rename(lambda column_name:column_name[0:] + '_' + f'{key}')
@@ -76,7 +76,7 @@ def read_file(height=None):
     else:
         return lazy_dic
 
-'''Merge dataframes with a single header'''
+#Merge dataframes with a single header starting with the 30m file
 def lf_merge():
     df_dic = read_file()  
     df_list = []
@@ -90,36 +90,70 @@ def lf_merge():
             i+=5
     return df
 
+#return adjacent columns as lazyframe 
+def column_filter(col):
+    lf = lf_merge().lazy() 
+    adj_dic = {} 
+    for r in range(35,136,5):
+        adj_dic.update({r:r+5})
+
+    i = 35
+    while i < 145:
+        df_pairs = []
+        for key, val in adj_dic.items():     
+            ver_ws = lf.select(cs.by_name(f'{col}'+'_'+f'{key}',f'{col}'+'_'+f'{val}'))
+            df_pairs.append(ver_ws)
+            i+=5
+
+    return df_pairs
+                 
+    #$ver_ws = lf.select(cs.matches('^W_Sp.{2}'))
 
 
 '''Begin Quality Checks'''
 #compare vertical('W') and horizontal('U/V')  wind speed at adjacent levels 
 def component_speed_profile_check():
-    lf = lf_merge().lazy() 
-    
-    for r in range(35,136,5):
-        adj_dic = {} 
-        adj_dic.update({r:r+5})
-        ic(adj_dic.items())
-    i = 30
-    while i < 140:
-        for key,items in adj_dic.items():     
-            ic(key)
-            for value in adj_dic.values():
-                ic(value)
-                df_pairs = []
-                ver_ws = lf.select(cs.by_name(f'W_Speed_{key}',f'W_Speed_{value}'))
-                df_pairs.append(ver_ws)
-                i+=5
-     #   for l in df_pairs:
-      #      ic(l.collect())
-    
-      #  ver_ws = lf.select(cs.by_name(f'W_Speed_{key}',f'W_Speed_{value}'))
-    #$ver_ws = lf.select(cs.matches('^W_Sp.{2}'))
-    ic(ver_ws.collect())
-    return lf
+    ver_col = 'W_Speed'
+    horU_col = 'U_Speed'
+    horV_col = 'V_Speed'
+    lf = column_filter(ver_col)
+
+    for item in lf:
+        df = item 
+        #return names as a list while maintaining lazyframe
+        lf = df.collect_schema().names()
+        col1 = lf[0]
+        col2 = lf[1]
+        df = df.collect()
+        #perform a difference check on the adjacent speed range gates and return a 9 if pass, and a 2 if fail  
+#        df_bool= df.with_columns(
+#            W_Check = pl
+#                .col(col1).abs() - 
+#                pl
+#                .col(col2).abs() >= 2
+#        )
+        df_col= df.with_columns(
+            df_bool = (pl.when(
+                    pl.col(col1).abs() - 
+                        pl.col(col2).abs() >= 2)
+                .then(2)
+                .otherwise(9)
+            )
+        )
 
 
+  #      df1 = df_diff.select([
+  #              pl.arg_where(pl.col('diff_col') >= 2)
+  #      ]).to_series()
+        df = df_col
+        print(df)
+
+
+
+
+
+
+#    return df 
 
 
 
@@ -136,10 +170,12 @@ def component_speed_profile_check():
 
 def test():
     df = component_speed_profile_check()
-  #  df = read_file_batch()
+ #   df = column_filter('U_Speed')
+  #  df = df[0]
+   # ic(df)
 #    df1 = pd.read_csv(file, dtype_backend='pyarrow')
  #   rprint("time",df)
-    return df 
+    return None 
     
 
 def QAQC_file():
@@ -156,6 +192,7 @@ def QAQC_file():
 if __name__ == '__main__': 
     
 #file = input("What is the path to the .csv file ")
-     QAQC_file()
+#     QAQC_file()
+    test()
 #    file_scan(file)
 #    file_read(file)
