@@ -6,6 +6,7 @@ import pandas as pd
 import pyarrow as pa
 import sys 
 import datetime
+import zipfile
 from icecream import ic
 from rich import print as print
 from rich.console import Console
@@ -16,7 +17,6 @@ from rich.traceback import install
 install()
 
 
-null_items = ['TIMESTAMP', 'm/s', '\u00B0', ""]
 
 schema = {
     'TIMESTAMP':pl.Datetime ,'VectorWindSpeed':pl.Float32, 'VectorWindDirection':pl.Int32, 'SpeedDirectionReliability':pl.Int32,
@@ -41,44 +41,53 @@ columns = {
 
 
 #Return all lazy files in a dictionary for easy reference and append height of each range gate to column name 
-def read_file(height=None):
-    global null_items
+def read_file(file_path, height=None):
+    null_items = ['TIMESTAMP', 'm/s', '\u00B0', ""]
 
     lazy_dic = {'30':'','35':'','40':'','45':'','50':'','55':'',
               '60':'','65':'','70':'','75':'','80':'','85':'',
               '90':'','95':'','100':'','105':'','110':'','115':'',
               '120':'','125':'','130':'','135':'','140':''}
 
-    for h in lazy_dic.keys():
-        file = (
-            pl
-            .scan_csv(f'SODAR_data/Wauna_SODAR{h}_Table15.csv', has_header=True, null_values=null_items, raise_if_empty=True)
-            .with_columns(
+    try:
+        if file_path.endswith('.zip'):
+            with zipfile.ZipFile(f'{file_path}', 'r') as zip_file:
+                file_path = file_path.strip('.zip')
+                zip_file.extractall(f'{file_path}')
+    except: 
+        raise 
+
+    else: 
+        for h in lazy_dic.keys():
+            file = (
                 pl
-                .col('TIMESTAMP').str
-                .to_datetime('%Y-%m-%d %H:%M:%S', strict=False))
-        )
-        lazy_dic.update({h:file})
+                .scan_csv(f'{file_path}/Wauna_SODAR{h}_Table15.csv', has_header=True, null_values=null_items, raise_if_empty=True)
+                .with_columns(
+                    pl
+                    .col('TIMESTAMP').str
+                    .to_datetime('%Y-%m-%d %H:%M:%S', strict=False))
+            )
+            lazy_dic.update({h:file})
 
-    '''Append the file height to the column names'''
-    for key, value in lazy_dic.items():
-        lf = lazy_dic[key]
-        lf1 = lf.rename(lambda column_name:column_name[0:] + '_' + f'{key}')
-        lf = lf1.rename({f'TIMESTAMP_{key}':'TIMESTAMP'}).collect()
-        lazy_dic.update({key:lf})
+        '''Append the file height to the column names'''
+        for key, value in lazy_dic.items():
+            lf = lazy_dic[key]
+            lf1 = lf.rename(lambda column_name:column_name[0:] + '_' + f'{key}')
+            lf = lf1.rename({f'TIMESTAMP_{key}':'TIMESTAMP'}).collect()
+            lazy_dic.update({key:lf})
 
-    #Return a single lazy frame based on height of data recordings 
-    if height is not None:
-        lf = lazy_dic[height]
-        return lf 
+        #Return a single lazy frame based on height of data recordings 
+        if height is not None:
+            lf = lazy_dic[height]
+            return lf 
 
-    #Return all files in a dictionary
-    else:
-        return lazy_dic
+        #Return all files in a dictionary
+        else:
+            return lazy_dic
 
-#Merge dataframes with a single header starting with the 30m file
+    #Merge dataframes with a single header starting with the 30m file
 def lf_merge():
-    df_dic = read_file()  
+    df_dic = read_file(file_path)  
     df_list = []
     for i in range(35,141,5):
        df_list.append(df_dic[str(i)])
@@ -93,9 +102,7 @@ def lf_merge():
 #return adjacent columns as lazyframe 
 def column_filter(col):
     lf = lf_merge().lazy() 
-    adj_dic = {} 
-    for r in range(35,136,5):
-        adj_dic.update({r:r+5})
+    adj_dic = {r:r+5 for r in range(35,136,5)}
 
     i = 35
     while i < 145:
@@ -113,40 +120,44 @@ def column_filter(col):
 '''Begin Quality Checks'''
 #compare vertical('W') and horizontal('U/V')  wind speed at adjacent levels 
 def component_speed_profile_check():
-    ver_col = 'W_Speed'
-    horU_col = 'U_Speed'
-    horV_col = 'V_Speed'
-    lf = column_filter(ver_col)
+    com_list = ['W_Speed', 'U_Speed', 'V_Speed']
+    for col in com_list:
+        
 
-    for item in lf:
-        df = item 
-        #return names as a list while maintaining lazyframe
-        lf = df.collect_schema().names()
-        col1 = lf[0]
-        col2 = lf[1]
-        df = df.collect()
-        #perform a difference check on the adjacent speed range gates and return a 9 if pass, and a 2 if fail  
-#        df_bool= df.with_columns(
-#            W_Check = pl
-#                .col(col1).abs() - 
-#                pl
-#                .col(col2).abs() >= 2
-#        )
-        df_col= df.with_columns(
-            df_bool = (pl.when(
-                    pl.col(col1).abs() - 
+        col_let = col.strip('_Speed')
+        lf = column_filter(col)
+    #    adj_dic = {r:r+5 for r in range(30,136,5)}
+
+
+        for item in lf:
+            df = item 
+            #return names as a list while maintaining lazyframe
+            lf = df.collect_schema().names()
+            col1 = lf[0]
+            col2 = lf[1]
+            height = [col1.strip(f'{col_let}' + 'Speed_') for col in col1]
+            h = height[0]
+            ic(h)
+           # for h in height_list:
+           #     alias = col1.strip('_'+str(h))
+            df = df.collect()
+
+            #perform a difference check on the adjacent speed range gates and return a 9 if pass, and a 2 if fail  
+            df_col= df.with_columns(
+                (pl.when(
+                        pl.col(col1).abs() - 
                         pl.col(col2).abs() >= 2)
-                .then(2)
-                .otherwise(9)
+                    .then(2)
+                    .otherwise(9)
+                ).alias(f'{col_let}'+'_Reliability_' + f'{h}')
             )
-        )
 
 
-  #      df1 = df_diff.select([
-  #              pl.arg_where(pl.col('diff_col') >= 2)
-  #      ]).to_series()
-        df = df_col
-        print(df)
+      #      df1 = df_diff.select([
+      #              pl.arg_where(pl.col('diff_col') >= 2)
+      #      ]).to_series()
+            df = df_col
+            print(df)
 
 
 
@@ -192,6 +203,7 @@ def QAQC_file():
 if __name__ == '__main__': 
     
 #file = input("What is the path to the .csv file ")
+    file_path = 'GPWauna_data.zip'
 #     QAQC_file()
     test()
 #    file_scan(file)
