@@ -24,15 +24,6 @@ logging.basicConfig(filename = 'log_sodarQC.log',
 
 logger = logging.getLogger(__name__)
 
-# schema = {
-#     'TIMESTAMP':pl.Datetime ,'VectorWindSpeed':pl.Float32, 'VectorWindDirection':pl.Float32, 'SpeedDirectionReliability':pl.Float32,
-#     'W_Speed':pl.Float32, 'W_Reliability':pl.Float32, 'W_Count':pl.UInt32, 'W_StandardDeviation':pl.Float32,
-#     'W_Amplitude':pl.Int32, 'W_Noise':pl.Int32, 'W_SNR':pl.Float32, 'W_ValidCount':pl.UInt32,
-#     'V_Speed':pl.Float32, 'V_Reliability':pl.Float32, 'V_Count':pl.UInt32, 'V_StandardDeviation':pl.Float32,
-#     'V_Amplitude':pl.Float32, 'V_Noise':pl.Int32, 'V_SNR':pl.Float32, 'V_ValidCount':pl.UInt32,
-#     'U_Speed':pl.Float32, 'U_Reliability':pl.Float32,'U_Count':pl.UInt32, 'U_StandardDeviation':pl.Float32,
-#     'U_Amplitude':pl.Int32, 'U_Noise':pl.Int32, 'U_SNR':pl.Float32, 'U_ValidCount':pl.UInt32
-# }
 
 schema = {
     'TIMESTAMP':pl.Datetime ,'VectorWindSpeed':pl.Float32, 'VectorWindDirection':pl.Float32, 'SpeedDirectionReliability':pl.Float32,
@@ -131,35 +122,38 @@ def lf_merge() -> pl.LazyFrame:
 
 
 
-#return adjacent columns as lazyframes, or a series, in a list of all range gates 
+#return adjacent columns as lazyframes, or a dataframe of 3 columns in the same range gate
 def column_filter(col=None, col_series=None):
     lf = lf_merge() 
-    try:
-        if col is not None:
-            adj_dic = {r:r+5 for r in range(35,136,5)}
-            df_pairs = []
-            
-            #create 2 column dataframes based on adjacent range gates
-            for key, val in adj_dic.items():     
-                ver_ws = lf.select(cs.by_name(f'{col}_{key}',f'{col}_{val}'))
-                df_pairs.append(ver_ws)
+#    try:
+    if col is not None:
+        adj_dict = {r:r+5 for r in range(35,136,5)}
+        df_pairs = []
+        
+        #create 2 column dataframes based on adjacent range gates
+        for key, val in adj_dict.items():     
+            ver_ws = lf.select(cs.by_name(f'{col}_{key}',f'{col}_{val}'))
+            df_pairs.append(ver_ws)
+            ic('Test')
 
-            return df_pairs
-                     
-        if col_series is not None:
-            series = [] 
-            for h in range(30,141,5):
-                lf_series = lf.select(pl.col(f'{col_series}_{h}'))
-                series.append(lf_series)
+        return df_pairs
+                 
 
-            return series 
+    '''Used for testing. May need to move this inside of std dev check function'''
+    if col_series is not None:
+        series = [] 
+        i = 30
+        while i < 145:
+            ic(i)
+            lf = lf_merge() 
+            height.append(i)
+            lf = lf.select(cs.by_name(f'W_StandardDeviation_{i}', f'U_StandardDeviation_{i}', f'V_StandardDeviation_{i}'))
+            series.append(lf)
+            i+=5
 
-    except Exception as e:
-        logging.error(f"Error occured returning column list {e}")
+    return None
 
 
-'''Begin Quality Checks'''
-#compare vertical('W') and horizontal('U/V')  wind speed at adjacent levels 
 def speed_profile_check(col_list, diff) -> list:
 
     lf_list = []
@@ -187,7 +181,7 @@ def speed_profile_check(col_list, diff) -> list:
                                 pl.col(col2).abs() >= (diff))
                             .then(2)
                             .otherwise(9)
-                        ).alias(f'{col_let}_Reliability_{h}')
+                        ).alias(f'{col_letter}_Reliability_{h}')
                         .cast(pl.UInt32)
                     )
                     
@@ -198,45 +192,36 @@ def speed_profile_check(col_list, diff) -> list:
             return lf_list 
 
     except Exception as e:
-        logging.error(f"Error performing speed_profile_check {e}")
+         logging.error(f"Error performing speed_profile_check {e}")
 
 
-'''Need to find a way to seperate the different columns from the series frames. Perhaps a check with a "startwith" '''
 def standard_dev_check():
-    ver_std = column_filter(col_series='W_StandardDeviation')
-    horU_std = column_filter(col_series='U_StandardDeviation')
-    horV_std = column_filter(col_series='V_StandardDeviation')
-    col_list = [ver_std, horU_std, horV_std] 
-    h = [h for h in range(30,141,5)]
-#    lf = lf_merge()
-    for lf in col_list:
-        for col in lf:
-            try:
-                for in col:
-                    ic(lf)
-                    df = lf.collect_schema().names()
-                    ic(df)
-                   # ver_lf = lf.select(f'W_StandardDeviation_{h}')
-                   # ic(ver_lf)
-                    condition = (
-                       pl.col(f'{col}_{h}') > 1) | (
-                           pl.col(f'{horU_std}_{h}') + pl.col(f'{col}_{h}') > 5) | (
-                           pl.col(f'{horV_std}_{h}') / pl.col(f'{horU_std}_{h}') > 5)
-                    
-                    for c in col_list:
-                       df = lf.with_columns(
-                           pl.when(condition)
-                           .then(2)
-                           .otherwise(9)
-                           .alias(f'std_reliability_{h}')
-                            .cast(pl.UInt32)
-                       )
-                      # ic(df.collect())
+    lf = lf_merge()
+    lf_col = lf.collect_schema().names()
+    lf_list = []
+    h = 30
+    while h < 145:          
+        condition = (
+               pl.col(f'W_StandardDeviation_{h}') > 1) | (
+                   pl.col(f'U_StandardDeviation_{h}') + pl.col(f'W_StandardDeviation_{h}') > 5) | (
+                   pl.col(f'V_StandardDeviation_{h}') / pl.col(f'U_StandardDeviation_{h}') > 5)
+            
+        df = lf.select(
+                    pl.when(condition)
+                    .then(2)
+                    .otherwise(9)
+                    .alias(f'std_reliability_{h}')
+                     .cast(pl.UInt32)
+                )
+        
+        h += 5
 
-                return df
+        lf_list.append(df)
+    ic(lf_list)
+    return lf_list 
 
-            except Exception as e:
-                logging.error(f"Error performing standard deviation check {e}")
+        # except Exception as e:
+        #     logging.error(f"Error performing standard deviation check {e}")
 
 def df_concat() -> pl.DataFrame:
 #    vec_list = ['VectorWindSpeed']
@@ -245,14 +230,8 @@ def df_concat() -> pl.DataFrame:
 #    com_df = speed_profile_check(vec_list, diff = 2)
     
     std_df = standard_dev_check()
-#    for lf in vector_df:
-#        ic(lf.collect())
-    # df = column_filter(col_series='U_Speed')
-  #  df = df[0]
-   # ic(df)
-#    df1 = pd.read_csv(file, dtype_backend='pyarrow')
- #   rprint("time",df)
-    return std_df 
+    ic(std_df)
+    return None 
 
 def QAQC_file():
 #    try:
