@@ -31,13 +31,13 @@ schema = {
 
 
 columns = {
-    'TIMESTAMP':'','VectorWindSpeed':'','VectorWindDirection':'','SpeedDirectionReliability':'',
-    'W_Speed':'','W_Reliability':'', 'W_Count':'','W_StandardDeviation':'',
-    'W_Amplitude':'','W_Noise':'','W_SNR':'','W_ValidCount':'',
-    'V_Speed':'','V_Reliability':'','V_Count':'','V_StandardDeviation':'',
-    'V_Amplitude':'','V_Noise':'','V_SNR':'','V_ValidCount':'',
-    'U_Speed':'','U_Reliability':'','U_Count':'','U_StandardDeviation':'',
-    'U_Amplitude':'','U_Noise':'','U_SNR':'','U_ValidCount':''
+    'TIMESTAMP','VectorWindSpeed','VectorWindDirection','SpeedDirectionReliability',
+    'W_Speed','W_Reliability', 'W_Count','W_StandardDeviation',
+    'W_Amplitude','W_Noise','W_SNR','W_ValidCount',
+    'V_Speed','V_Reliability','V_Count','V_StandardDeviation',
+    'V_Amplitude','V_Noise','V_SNR','V_ValidCount',
+    'U_Speed','U_Reliability','U_Count','U_StandardDeviation',
+    'U_Amplitude','U_Noise','U_SNR','U_ValidCount'
 }
 
 
@@ -259,7 +259,7 @@ def precip_check():
 
         return precip_list 
     except Exception as e:
-        logging.error(f"Error performing echo check {e}")
+        logging.error(f"Error performing precip check {e}")
 
 
 #def echo_check(): could add later, but not recommended for QA/QC
@@ -268,15 +268,46 @@ def precip_check():
 
 #merge all QC columns into one Dataframe and compare the validity of each range gate, then return the lowest number as the valid code. 
 def df_merge() -> pl.DataFrame:
+    lf = lf_merge()
     lf1 = pl.concat(speed_profile_check(), how='horizontal', parallel=True)
     lf2 = pl.concat(standard_dev_check(), how='horizontal', parallel=True)
     lf3 = pl.concat(noise_check(), how='horizontal', parallel=True)
     lf4 = pl.concat(echo_check(), how='horizontal', parallel=True)
     lf5 = pl.concat(precip_check(), how='horizontal', parallel=True)
-    df1 = pl.concat([lf1,lf2,lf3,lf4,lf5], how='horizontal')
-    ic(df1.collect())
+    df1 = pl.concat([lf,lf1,lf2,lf3,lf4,lf5], how='horizontal', parallel=True)#.collect()
 
-    return df1 
+    '''Return the minimum validity code for each check as the overall reliabilty. Precip_Check is left as a seperate validity column'''
+    h = 30
+    while h < 145:
+        w_df = df1.select(pl
+            .when(pl.col(f'Precip_Check_{h}') < 4)
+            .then(3)
+            .otherwise(pl
+            .min_horizontal([(f'W_Speed_Check_{h}'),(f'STD_Reliability_{h}'),(f'Echo_Check_{h}'),(f'Noise_Check_{h}')]))
+            .alias(f'W_Reliability_{h}')
+        )
+
+        
+        v_df = df1.select(
+            pl.when(pl.col(f'Precip_Check_{h}') < 4)
+            .then(3)
+            .otherwise(
+                pl.min_horizontal([(f'V_Speed_Check_{h}'),(f'STD_Reliability_{h}'),(f'Echo_Check_{h}'),(f'Noise_Check_{h}')]))
+            .alias(f'V_Reliability_{h}')
+        )
+
+        u_df = df1.select(
+            pl.when(pl.col(f'Precip_Check_{h}') < 4)
+            .then(3)
+            .otherwise(
+                pl.min_horizontal([(f'U_Speed_Check_{h}'),(f'STD_Reliability_{h}'),(f'Echo_Check_{h}'),(f'Noise_Check_{h}')]))
+            .alias(f'U_Reliability_{h}')
+        )
+
+        h += 5
+
+        print(w_df.collect())
+   # return w_df.collect() 
 
 def QAQC_file():
 #    try:
