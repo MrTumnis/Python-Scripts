@@ -152,12 +152,15 @@ def speed_profile_check() -> list:
         
         speed_list.append(vec_df)
         h +=5 
+
     return speed_list
     
+
 
 def standard_dev_check() -> list:
     lf = lf_merge()
     lf_list = []
+
     try:
         h = 30
         while h < 145:          
@@ -182,9 +185,12 @@ def standard_dev_check() -> list:
     except Exception as e:
         logging.error(f"Error performing standard deviation check {e}")
 
+
+
 def noise_check() -> list:
     lf = lf_merge()
     noise_list = []
+    
     try:
         h = 30
         h2 = h + 5
@@ -206,15 +212,18 @@ def noise_check() -> list:
 
             noise_list.append(dr)
             h +=5 
-           # lf = pl.join(df)
+
         return noise_list
 
     except Exception as e:
         logging.error(f"Error performing noise check {e}")
 
+
+
 def echo_check() -> list:
     lf = lf_merge()
     echo_list = []
+
     try:
         h = 30
         h2 = h + 5
@@ -242,9 +251,12 @@ def echo_check() -> list:
     except Exception as e:
         logging.error(f"Error performing echo check {e}")
 
+
+
 def precip_check():
     lf = lf_merge()
     precip_list = []
+
     try:
         h = 30
         while h < 145:
@@ -258,6 +270,7 @@ def precip_check():
             precip_list.append(df)
 
         return precip_list 
+
     except Exception as e:
         logging.error(f"Error performing precip check {e}")
 
@@ -268,17 +281,17 @@ def precip_check():
 
 #merge all QC columns into one Dataframe and compare the validity of each range gate, then return the lowest number as the valid code. 
 def df_merge() -> pl.DataFrame:
-    lf = lf_merge()
-    lf1 = pl.concat(speed_profile_check(), how='horizontal', parallel=True)
-    lf2 = pl.concat(standard_dev_check(), how='horizontal', parallel=True)
-    lf3 = pl.concat(noise_check(), how='horizontal', parallel=True)
-    lf4 = pl.concat(echo_check(), how='horizontal', parallel=True)
-    lf5 = pl.concat(precip_check(), how='horizontal', parallel=True)
+    lf = lf_merge().collect()
+    lf1 = pl.concat(speed_profile_check(), how='horizontal', parallel=True).collect()
+    lf2 = pl.concat(standard_dev_check(), how='horizontal', parallel=True).collect()
+    lf3 = pl.concat(noise_check(), how='horizontal', parallel=True).collect()
+    lf4 = pl.concat(echo_check(), how='horizontal', parallel=True).collect()
+    lf5 = pl.concat(precip_check(), how='horizontal', parallel=True).collect()
     df1 = pl.concat([lf,lf1,lf2,lf3,lf4,lf5], how='horizontal', parallel=True)
-
+    check_list = []
     '''Return the minimum validity code (2 or 9) for each check as the reliabilty for each wind component. Precip_Check flag sets the validity to 3'''
     h = 30
-    while h < 145:
+    while h < 141:
         w_df = df1.select(pl
             .when(pl.col(f'Precip_Check_{h}') < 4)
             .then(3)
@@ -295,6 +308,7 @@ def df_merge() -> pl.DataFrame:
             .alias(f'V_Reliability_{h}').cast(pl.UInt32)
         )
 
+
         u_df = df1.select(pl
             .when(pl.col(f'Precip_Check_{h}') < 4)
             .then(3)
@@ -304,16 +318,16 @@ def df_merge() -> pl.DataFrame:
         )
 
         wvu_df = pl.concat([w_df,v_df,u_df], how='horizontal')
+       # names = wvu_df.collect_schema().names()
+        check_list.append(wvu_df)
 
-        df2 = wvu_df.join_asof(lf,on='TIMESTAMP', by_left=[f'W_Reliability_{h}',f'V_Reliability_{h}',f'U_Reliability_{h}'],by_right=[f'W_Reliability_{h}',f'V_Reliability_{h}',f'U_Reliability_{h}'], strategy='backward', coalesce=True)
-        # df2 = wvu_df.join(lf, on='TIMESTAMP', how='inner', coalesce=True, maintain_order='right')
-        # df2 = wvu_df.join(lf, left_on=f'W_Reliability_{h}', right_on=f'W_Reliability_{h}', how='full', coalesce=True, maintain_order='right')
 
         h += 5
 
-    print(wvu_df.collect())
-    print(df2.collect())
-    return df2.collect() 
+        
+    # df2 = lf.with_columns(col_names)
+    # print(df2)
+    # return df2.collect() 
 
 def QAQC_file():
 #    try:
