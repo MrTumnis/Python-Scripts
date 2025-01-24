@@ -21,11 +21,11 @@ logger = logging.getLogger(__name__)
 
 schema = {
     'TIMESTAMP':pl.Datetime ,'VectorWindSpeed':pl.Float32, 'VectorWindDirection':pl.Float32, 'SpeedDirectionReliability':pl.Float32,
-    'W_Speed':pl.Float32, 'W_Reliability':pl.Float32, 'W_Count':pl.Float32, 'W_StandardDeviation':pl.Float32,
+    'W_Speed':pl.Float32, 'W_Reliability':pl.UInt32, 'W_Count':pl.Float32, 'W_StandardDeviation':pl.Float32,
     'W_Amplitude':pl.Int32, 'W_Noise':pl.Float32, 'W_SNR':pl.Float32, 'W_ValidCount':pl.Float32,
-    'V_Speed':pl.Float32, 'V_Reliability':pl.Float32, 'V_Count':pl.Float32, 'V_StandardDeviation':pl.Float32,
+    'V_Speed':pl.Float32, 'V_Reliability':pl.UInt32, 'V_Count':pl.Float32, 'V_StandardDeviation':pl.Float32,
     'V_Amplitude':pl.Int32, 'V_Noise':pl.Float32, 'V_SNR':pl.Float32, 'V_ValidCount':pl.Float32,
-    'U_Speed':pl.Float32, 'U_Reliability':pl.Float32,'U_Count':pl.Float32, 'U_StandardDeviation':pl.Float32,
+    'U_Speed':pl.Float32, 'U_Reliability':pl.UInt32,'U_Count':pl.Float32, 'U_StandardDeviation':pl.Float32,
     'U_Amplitude':pl.Int32, 'U_Noise':pl.Float32, 'U_SNR':pl.Float32, 'U_ValidCount':pl.Float32
 }
 
@@ -274,9 +274,9 @@ def df_merge() -> pl.DataFrame:
     lf3 = pl.concat(noise_check(), how='horizontal', parallel=True)
     lf4 = pl.concat(echo_check(), how='horizontal', parallel=True)
     lf5 = pl.concat(precip_check(), how='horizontal', parallel=True)
-    df1 = pl.concat([lf,lf1,lf2,lf3,lf4,lf5], how='horizontal', parallel=True)#.collect()
+    df1 = pl.concat([lf,lf1,lf2,lf3,lf4,lf5], how='horizontal', parallel=True)
 
-    '''Return the minimum validity code for each check as the overall reliabilty. Precip_Check is left as a seperate validity column'''
+    '''Return the minimum validity code (2 or 9) for each check as the reliabilty for each wind component. Precip_Check flag sets the validity to 3'''
     h = 30
     while h < 145:
         w_df = df1.select(pl
@@ -284,30 +284,36 @@ def df_merge() -> pl.DataFrame:
             .then(3)
             .otherwise(pl
             .min_horizontal([(f'W_Speed_Check_{h}'),(f'STD_Reliability_{h}'),(f'Echo_Check_{h}'),(f'Noise_Check_{h}')]))
-            .alias(f'W_Reliability_{h}')
+            .alias(f'W_Reliability_{h}').cast(pl.UInt32)
         )
 
-        
-        v_df = df1.select(
-            pl.when(pl.col(f'Precip_Check_{h}') < 4)
+        v_df = df1.select(pl
+            .when(pl.col(f'Precip_Check_{h}') < 4)
             .then(3)
-            .otherwise(
-                pl.min_horizontal([(f'V_Speed_Check_{h}'),(f'STD_Reliability_{h}'),(f'Echo_Check_{h}'),(f'Noise_Check_{h}')]))
-            .alias(f'V_Reliability_{h}')
+            .otherwise(pl
+            .min_horizontal([(f'V_Speed_Check_{h}'),(f'STD_Reliability_{h}'),(f'Echo_Check_{h}'),(f'Noise_Check_{h}')]))
+            .alias(f'V_Reliability_{h}').cast(pl.UInt32)
         )
 
-        u_df = df1.select(
-            pl.when(pl.col(f'Precip_Check_{h}') < 4)
+        u_df = df1.select(pl
+            .when(pl.col(f'Precip_Check_{h}') < 4)
             .then(3)
-            .otherwise(
-                pl.min_horizontal([(f'U_Speed_Check_{h}'),(f'STD_Reliability_{h}'),(f'Echo_Check_{h}'),(f'Noise_Check_{h}')]))
-            .alias(f'U_Reliability_{h}')
+            .otherwise(pl
+            .min_horizontal([(f'U_Speed_Check_{h}'),(f'STD_Reliability_{h}'),(f'Echo_Check_{h}'),(f'Noise_Check_{h}')]))
+            .alias(f'U_Reliability_{h}').cast(pl.UInt32)
         )
+
+        wvu_df = pl.concat([w_df,v_df,u_df], how='horizontal')
+
+        df2 = wvu_df.join_asof(lf,on='TIMESTAMP', by_left=[f'W_Reliability_{h}',f'V_Reliability_{h}',f'U_Reliability_{h}'],by_right=[f'W_Reliability_{h}',f'V_Reliability_{h}',f'U_Reliability_{h}'], strategy='backward', coalesce=True)
+        # df2 = wvu_df.join(lf, on='TIMESTAMP', how='inner', coalesce=True, maintain_order='right')
+        # df2 = wvu_df.join(lf, left_on=f'W_Reliability_{h}', right_on=f'W_Reliability_{h}', how='full', coalesce=True, maintain_order='right')
 
         h += 5
 
-        print(w_df.collect())
-   # return w_df.collect() 
+    print(wvu_df.collect())
+    print(df2.collect())
+    return df2.collect() 
 
 def QAQC_file():
 #    try:
