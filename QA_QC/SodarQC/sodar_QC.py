@@ -5,8 +5,12 @@ import polars.selectors as cs
 import logging
 import datetime
 import zipfile
+import glob
+import os
+import argparse
+
 from icecream import ic
-from rich import print as print
+from rich import print 
 from rich.traceback import install
 
 install()
@@ -14,9 +18,6 @@ install()
 logging.basicConfig(filename = 'log_sodarQC.log',
                     format = '%(asctime)s %(message)s',
                     filemode='w')
-
-
-logger = logging.getLogger(__name__)
 
 
 schema = {
@@ -42,7 +43,7 @@ columns = {
 
 
 #Return all lazy files in a dictionary for easy reference and append height of each range gate to column name 
-def read_file(file_path, height=None) -> dict:
+def read_file(height=None) -> dict:
 
     null_items = ['TIMESTAMP', 'm/s', '\u00B0', ""]
     
@@ -51,6 +52,14 @@ def read_file(file_path, height=None) -> dict:
               '60':'','65':'','70':'','75':'','80':'','85':'',
               '90':'','95':'','100':'','105':'','110':'','115':'',
               '120':'','125':'','130':'','135':'','140':''}
+ 
+    try:
+        file = glob.glob(os.path.join('*GPWauna*'))
+        file_path = file[0]
+        
+    except Exception as e:
+        logging.error(f"Error reading file: {e}")
+        print(f"Error reading file: {e}")
 
     try:
         if file_path.endswith('.zip'):
@@ -93,24 +102,26 @@ def read_file(file_path, height=None) -> dict:
             return lazy_dict
 
     except Exception as e:
-        logging.error(f"Error occured processing file {e}")
+        logging.error(f"Error occured processing file: {e}")
 
 
 
 #Merge dataframes with a single header starting with the 30m file
 def lf_merge() -> pl.LazyFrame:
-    df_dic = read_file(file_path)  
+    df_dic = read_file()  
     df_list = []
+    try:
+        for i in range(35,141,5):
+           df_list.append(df_dic[str(i)])
 
-    for i in range(35,141,5):
-       df_list.append(df_dic[str(i)])
+        df = df_dic['30']
 
-    df = df_dic['30']
+        for item in df_list:
+            df = df.lazy().join(item.lazy(), on='TIMESTAMP', how='inner') 
 
-    for item in df_list:
-        df = df.lazy().join(item.lazy(), on='TIMESTAMP', how='inner') 
-
-    return df
+        return df
+    except Exception as e:
+        logging.error(f"Error occured merging lazyframe: {e}")
 
 
 
@@ -118,43 +129,47 @@ def lf_merge() -> pl.LazyFrame:
 def speed_profile_check() -> list:
     lf = lf_merge()
     speed_list = []
-    h = 30
-    h2 = h + 5
-    
-    '''perform a difference check on the absolute value of adjacent range gates and return a 9 if pass, and a 2 to flag '''
-    while h < 145: 
-
-        w_df = lf.select(pl
-                         .when(pl.col('TIMESTAMP').dt.hour().is_between(10,17) & (pl.col(f'W_Speed_{h}').abs() - pl.col(f'W_Speed_{h2}').abs() >= 2))
-                         .then(2)
-                         .otherwise(9)
-                         .alias(f'W_Speed_Check_{h}')).cast(pl.UInt32)
-        speed_list.append(w_df)
-
-        u_df = lf.select(pl
-                        .when(pl.col('TIMESTAMP').dt.hour().is_between(10,17) & (pl.col(f'U_Speed_{h}').abs() - pl.col(f'U_Speed_{h2}').abs() >= 2))
-                        .then(2)
-                        .otherwise(9)
-                        .alias(f'U_Speed_Check_{h}')).cast(pl.UInt32)
-        speed_list.append(u_df)
+    try:
+        h = 30
+        h2 = h + 5
         
-        v_df = lf.select(pl
-                       .when(pl.col('TIMESTAMP').dt.hour().is_between(10,17) & (pl.col(f'V_Speed_{h}').abs() - pl.col(f'V_Speed_{h2}').abs() >= 2))
-                       .then(2)
-                       .otherwise(9)
-                       .alias(f'V_Speed_Check_{h}')).cast(pl.UInt32)
-        speed_list.append(v_df)
+        '''perform a difference check on the absolute value of adjacent range gates and return a 9 if pass, and a 2 to flag '''
+        while h < 145: 
 
-        vec_df = lf.select(pl
-                       .when(pl.col('TIMESTAMP').dt.hour().is_between(10,17) & (pl.col(f'VectorWindSpeed_{h}').abs() - pl.col(f'VectorWindSpeed_{h2}').abs() >= 5))
-                       .then(2)
-                       .otherwise(9)
-                       .alias(f'VectorWindSpeed_Check_{h}')).cast(pl.UInt32)
-        speed_list.append(vec_df)
+            w_df = lf.select(pl
+                             .when(pl.col('TIMESTAMP').dt.hour().is_between(10,17) & (pl.col(f'W_Speed_{h}').abs() - pl.col(f'W_Speed_{h2}').abs() >= 2))
+                             .then(2)
+                             .otherwise(9)
+                             .alias(f'W_Speed_Check_{h}')).cast(pl.UInt32)
+            speed_list.append(w_df)
 
-        h +=5 
+            u_df = lf.select(pl
+                            .when(pl.col('TIMESTAMP').dt.hour().is_between(10,17) & (pl.col(f'U_Speed_{h}').abs() - pl.col(f'U_Speed_{h2}').abs() >= 2))
+                            .then(2)
+                            .otherwise(9)
+                            .alias(f'U_Speed_Check_{h}')).cast(pl.UInt32)
+            speed_list.append(u_df)
+            
+            v_df = lf.select(pl
+                           .when(pl.col('TIMESTAMP').dt.hour().is_between(10,17) & (pl.col(f'V_Speed_{h}').abs() - pl.col(f'V_Speed_{h2}').abs() >= 2))
+                           .then(2)
+                           .otherwise(9)
+                           .alias(f'V_Speed_Check_{h}')).cast(pl.UInt32)
+            speed_list.append(v_df)
 
-    return speed_list
+            vec_df = lf.select(pl
+                           .when(pl.col('TIMESTAMP').dt.hour().is_between(10,17) & (pl.col(f'VectorWindSpeed_{h}').abs() - pl.col(f'VectorWindSpeed_{h2}').abs() >= 5))
+                           .then(2)
+                           .otherwise(9)
+                           .alias(f'VectorWindSpeed_Check_{h}')).cast(pl.UInt32)
+            speed_list.append(vec_df)
+
+            h +=5 
+
+        return speed_list
+
+    except Exception as e:
+        logging.error(f"Error performing speed profile check: {e}")
     
 
 
@@ -184,7 +199,7 @@ def standard_dev_check() -> list:
         return lf_list 
 
     except Exception as e:
-        logging.error(f"Error performing standard deviation check {e}")
+        logging.error(f"Error performing standard deviation check: {e}")
 
 
 
@@ -217,7 +232,7 @@ def noise_check() -> list:
         return noise_list
 
     except Exception as e:
-        logging.error(f"Error performing noise check {e}")
+        logging.error(f"Error performing noise check: {e}")
 
 
 
@@ -273,103 +288,115 @@ def precip_check():
         return precip_list 
 
     except Exception as e:
-        logging.error(f"Error performing precip check {e}")
+        logging.error(f"Error performing precip check: {e}")
 
 
-#def echo_check(): could add later, but not recommended for QA/QC
+#def echo_check(): can add later, but not recommended for QA/QC
     
 
 
 #merge all QC columns into one Dataframe and compare the validity of each range gate, then return the lowest number as the valid code. 
-def df_merge() -> pl.DataFrame:
-    lf = lf_merge().collect()
-    lf1 = pl.concat(speed_profile_check(), how='horizontal', parallel=True).collect()
-    lf2 = pl.concat(standard_dev_check(), how='horizontal', parallel=True).collect()
-    lf3 = pl.concat(noise_check(), how='horizontal', parallel=True).collect()
-    lf4 = pl.concat(echo_check(), how='horizontal', parallel=True).collect()
-    lf5 = pl.concat(precip_check(), how='horizontal', parallel=True).collect()
-    df1 = pl.concat([lf,lf1,lf2,lf3,lf4,lf5], how='horizontal', parallel=True)
-    check_dict = {} 
-    df_time = lf.select('TIMESTAMP')
+def df_merge(args):
+    try:
+        lf = lf_merge().collect()
+        lf1 = pl.concat(speed_profile_check(), how='horizontal', parallel=True).collect()
+        lf2 = pl.concat(standard_dev_check(), how='horizontal', parallel=True).collect()
+        lf3 = pl.concat(noise_check(), how='horizontal', parallel=True).collect()
+        lf4 = pl.concat(echo_check(), how='horizontal', parallel=True).collect()
+        lf5 = pl.concat(precip_check(), how='horizontal', parallel=True).collect()
+        df1 = pl.concat([lf,lf1,lf2,lf3,lf4,lf5], how='horizontal', parallel=True)
+        check_dict = {} 
+        df_time = lf.select('TIMESTAMP')
 
-    '''Return the minimum validity code (2 or 9) for each check as the reliabilty for each wind component. Precip_Check flag sets the validity to 3'''
-    h = 30
-    while h < 141:
-        df2 = df1.select(pl
-            .when(pl.col(f'Precip_Check_{h}') < 4)
-            .then(3)
-            .otherwise(pl
-            .min_horizontal([(f'W_Speed_Check_{h}'),(f'STD_Reliability_{h}'),(f'Echo_Check_{h}'),(f'Noise_Check_{h}')]))
-            .alias(f'W_Reliability_{h}').cast(pl.UInt32)
-        )
+        '''Return the minimum validity code (2 or 9) for each check as the reliabilty for each wind component. Precip_Check flag sets the validity to 3'''
+        h = 30
+        while h < 141:
+            df2 = df1.select(pl
+                .when(pl.col(f'Precip_Check_{h}') < 4)
+                .then(3)
+                .otherwise(pl
+                .min_horizontal([(f'W_Speed_Check_{h}'),(f'STD_Reliability_{h}'),(f'Echo_Check_{h}'),(f'Noise_Check_{h}')]))
+                .alias(f'W_Reliability_{h}').cast(pl.UInt32)
+            )
+            
+            df3 = df1.select(pl
+                .when(pl.col(f'Precip_Check_{h}') < 4)
+                .then(3)
+                .otherwise(pl
+                .min_horizontal([(f'V_Speed_Check_{h}'),(f'STD_Reliability_{h}'),(f'Echo_Check_{h}'),(f'Noise_Check_{h}')]))
+                .alias(f'V_Reliability_{h}').cast(pl.UInt32)
+            )
+
+            df4 = df1.select(pl
+                .when(pl.col(f'Precip_Check_{h}') < 4)
+                .then(3)
+                .otherwise(pl
+                .min_horizontal([(f'U_Speed_Check_{h}'),(f'STD_Reliability_{h}'),(f'Echo_Check_{h}'),(f'Noise_Check_{h}')]))
+                .alias(f'U_Reliability_{h}').cast(pl.UInt32)
+            )
+
+
+            wvu_df = pl.concat([df2,df3,df4], how='horizontal')
+            time_df = df_time.hstack(wvu_df)
+            check_dict.update({h:time_df}) 
+
+            h += 5
+
+        h_list = []
+        for h in range(35,141,5):
+            h_list.append(check_dict[h])
         
-        df3 = df1.select(pl
-            .when(pl.col(f'Precip_Check_{h}') < 4)
-            .then(3)
-            .otherwise(pl
-            .min_horizontal([(f'V_Speed_Check_{h}'),(f'STD_Reliability_{h}'),(f'Echo_Check_{h}'),(f'Noise_Check_{h}')]))
-            .alias(f'V_Reliability_{h}').cast(pl.UInt32)
-        )
+        df5 = check_dict[30]
 
-        df4 = df1.select(pl
-            .when(pl.col(f'Precip_Check_{h}') < 4)
-            .then(3)
-            .otherwise(pl
-            .min_horizontal([(f'U_Speed_Check_{h}'),(f'STD_Reliability_{h}'),(f'Echo_Check_{h}'),(f'Noise_Check_{h}')]))
-            .alias(f'U_Reliability_{h}').cast(pl.UInt32)
-        )
+        for df in h_list: 
+            df5 = df5.join(df, on='TIMESTAMP', how='inner', coalesce=False)
+        
+        # Replace columns in original dataframe with the check values
+        common_columns = set(df5.columns) & set(lf.columns)
+        long_df= lf.with_columns([df5[col].alias(col) for col in common_columns])
+       
+        fnl_dict = {}
+        f = 30
+        while f < 141 :
+            f2 = f + 100 #quick way to exclude the files in the 100's in the iteration. i.e not returning 140m with the 40m file
+            split_df = long_df.select('TIMESTAMP',(cs.ends_with(f'{f}')) & (cs.exclude(cs.ends_with(f'{f2}'))))
+            named_df = split_df.rename(lambda column_name:column_name.strip(f'_{f}'))
+            fnl_df = named_df.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d %H:%M:%S'))
+            fnl_dict.update({f:fnl_df}) 
 
+            f += 5
 
-        wvu_df = pl.concat([df2,df3,df4], how='horizontal')
-        time_df = df_time.hstack(wvu_df)
-        check_dict.update({h:time_df}) 
+        if args.longform:
+            longform = long_df.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d %H:%M:%S'))
+            return longform
+        else:
+            return fnl_dict
 
-        h += 5
-
-    h_list = []
-    for h in range(35,141,5):
-        h_list.append(check_dict[h])
-    
-    df5 = check_dict[30]
-
-    for df in h_list: 
-        df5 = df5.join(df, on='TIMESTAMP', how='inner', coalesce=False)
-    
-    common_columns = set(df5.columns) & set(lf.columns)
-
-    # Replace columns in original dataframe with the check values
-    df6 = lf.with_columns([df5[col].alias(col) for col in common_columns])
-   
-    fnl_dict = {}
-    f = 30
-    while f < 141 :
-        f2 = f + 100 #quick way to exclude the files in the 100's in the iteration. i.e not returning 140m with the 40m file
-        split_df = df6.select('TIMESTAMP',(cs.ends_with(f'{f}')) & (cs.exclude(cs.ends_with(f'{f2}'))))
-        named_df = split_df.rename(lambda column_name:column_name.strip(f'_{f}'))
-        fnl_df = named_df.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d %H:%M:%S'))
-        fnl_dict.update({f:fnl_df}) 
-
-        f += 5
-
-    return fnl_dict
-
+    except Exception as e:
+        logging.error(f"Error in processing final dataframe: {e}")
 
 
 if __name__ == '__main__': 
-
-    def QAQC_file():
-    #    try:
-        date = datetime.datetime.now()
-        merged_df = df_merge()
-
-        #seperate dataframe back to seperate files
-        for h, lf in merged_df.items():
-            lf.write_csv(date.strftime("%Y%m%d") + '-' + f'SODAR{h}_QA-QC' + '.csv', include_header=True)
-     #   except Exception as e:
-     #       logging.error(f"Error writing to csv {e}")
-
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-l', '--longform', action='store_true' ,help="Print a csv of QC'd files combined")
+    parser.add_argument('-e', '--explain', action='store_true', help="Show the steps taken for the calculations of each check")
+    args = parser.parse_args()
     
-#file = input("What is the path to the .csv file ")
-    file_path = 'GPWauna_data'
-    QAQC_file()
-#    df_concat()
+
+    date = datetime.datetime.now()
+
+    try:
+        merged_df = df_merge(args)
+
+        if args.longform:
+            merged_df.write_csv(date.strftime("%Y%m%d") + '-' + 'SODAR_QA-QC_longform' + '.csv', include_header=True)
+
+        else:
+            for h, df in merged_df.items():
+                df.write_csv(date.strftime("%Y%m%d") + '-' + f'SODAR{h}_QA-QC' + '.csv', include_header=True)
+
+    except Exception as e:
+        logging.error(f"Error writing to csv: {e}")
+        print(f"Error writing to csv: {e}")
+
+
