@@ -8,6 +8,7 @@ import zipfile
 import glob
 import os
 import argparse
+import sys
 
 from icecream import ic
 from rich import print 
@@ -298,15 +299,15 @@ def precip_check():
 #merge all QC columns into one Dataframe and compare the validity of each range gate, then return the lowest number as the valid code. 
 def df_merge(args):
     try:
-        lf = lf_merge().collect()
-        lf1 = pl.concat(speed_profile_check(), how='horizontal', parallel=True).collect()
-        lf2 = pl.concat(standard_dev_check(), how='horizontal', parallel=True).collect()
-        lf3 = pl.concat(noise_check(), how='horizontal', parallel=True).collect()
-        lf4 = pl.concat(echo_check(), how='horizontal', parallel=True).collect()
-        lf5 = pl.concat(precip_check(), how='horizontal', parallel=True).collect()
-        df1 = pl.concat([lf,lf1,lf2,lf3,lf4,lf5], how='horizontal', parallel=True)
+        lf = lf_merge()
+        lf1 = pl.concat(speed_profile_check(), how='horizontal', parallel=True)
+        lf2 = pl.concat(standard_dev_check(), how='horizontal', parallel=True)
+        lf3 = pl.concat(noise_check(), how='horizontal', parallel=True)
+        lf4 = pl.concat(echo_check(), how='horizontal', parallel=True)
+        lf5 = pl.concat(precip_check(), how='horizontal', parallel=True)
+        df1 = pl.concat([lf,lf1,lf2,lf3,lf4,lf5], how='horizontal', parallel=True).collect()
         check_dict = {} 
-        df_time = lf.select('TIMESTAMP')
+        df_time = df1.select('TIMESTAMP')
 
         '''Return the minimum validity code (2 or 9) for each check as the reliabilty for each wind component. Precip_Check flag sets the validity to 3'''
         h = 30
@@ -352,7 +353,8 @@ def df_merge(args):
             df5 = df5.join(df, on='TIMESTAMP', how='inner', coalesce=False)
         
         # Replace columns in original dataframe with the check values
-        common_columns = set(df5.columns) & set(lf.columns)
+        lf2 = lf.collect()
+        common_columns = set(df5.columns) & set(lf2.columns)
         long_df= lf.with_columns([df5[col].alias(col) for col in common_columns])
        
         fnl_dict = {}
@@ -366,9 +368,13 @@ def df_merge(args):
 
             f += 5
 
-        if args.longform:
+        if args.explain:
+           print(lf1.explain()) 
+
+        elif args.longform:
             longform = long_df.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d %H:%M:%S'))
             return longform
+
         else:
             return fnl_dict
 
@@ -380,8 +386,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-l', '--longform', action='store_true' ,help="Print a csv of QC'd files combined")
     parser.add_argument('-e', '--explain', action='store_true', help="Show the steps taken for the calculations of each check")
+    parser.add_argument('-v', '--version', action='store_true', help="Show the versions of used dependencies")
     args = parser.parse_args()
-    
+
+    if args.version:
+        pl.show_versions()
+        sys.exit()
 
     date = datetime.datetime.now()
 
@@ -392,7 +402,8 @@ if __name__ == '__main__':
             merged_df.write_csv(date.strftime("%Y%m%d") + '-' + 'SODAR_QA-QC_longform' + '.csv', include_header=True)
 
         else:
-            for h, df in merged_df.items():
+            for h, lf in merged_df.items():
+                df = lf.collect()
                 df.write_csv(date.strftime("%Y%m%d") + '-' + f'SODAR{h}_QA-QC' + '.csv', include_header=True)
 
     except Exception as e:
