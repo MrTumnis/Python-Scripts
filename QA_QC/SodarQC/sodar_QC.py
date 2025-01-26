@@ -337,36 +337,38 @@ def df_merge() -> pl.DataFrame:
     
     common_columns = set(df5.columns) & set(lf.columns)
 
-    # Replace columns in df1 with values from df2 if they have the same name
+    # Replace columns in original dataframe with the check values
     fnl_df = lf.with_columns([df5[col].alias(col) for col in common_columns])
-    
-    # check_names = df5.collect_schema().names()
-    # lf_names = lf.collect_schema().names()
-  #  fnl_df = df5.join(lf, on='TIMESTAMP', how='inner', maintain_order='left', coalesce=None)
+   
+    fnl_dict = {}
+    f = 30
+    while f < 141 :
+        f2 = f + 100 #quick way to exclude the files in the 100's in the iteration. i.e not returning 140m with the 40m file
+        split_df = fnl_df.select('TIMESTAMP',(cs.ends_with(f'{f}')) & (cs.exclude(cs.ends_with(f'{f2}'))))
+        named_df = split_df.rename(lambda column_name:column_name.strip(f'_{f}'))
+        fnl_dict.update({f:named_df}) 
 
-    # fnl_df = merged_df.with_columns(pl.all().name.map()
-    #fnl_df = merged_df.drop(check_names)
+        f += 5
 
-
-
-    ic(fnl_df)
-    return fnl_df
-
-
+    return fnl_dict
 
 
-def QAQC_file():
-#    try:
-    date = datetime.datetime.now()
-    merged_df = df_merge()
-    merged_df.write_csv(date.strftime("%Y%m%d") + '-' + 'SODAR_QA-QC' + '.csv', include_header=True)
-   # styled_df.write_excel(date.strftime("%Y%m%d") + '-' + 'SODAR_df' + '.xlsx')
- #   except Exception as e:
- #       logging.error(f"Error writing to csv {e}")
 
 if __name__ == '__main__': 
+
+    def QAQC_file():
+    #    try:
+        date = datetime.datetime.now()
+        merged_df = df_merge()
+
+        #seperate dataframe back to seperate files
+        for h, lf in merged_df.items():
+            lf.write_csv(date.strftime("%Y%m%d") + '-' + f'SODAR{h}_QA-QC' + '.csv', include_header=True)
+     #   except Exception as e:
+     #       logging.error(f"Error writing to csv {e}")
+
     
 #file = input("What is the path to the .csv file ")
-    file_path = 'GPWauna_data.zip'
+    file_path = 'GPWauna_data'
     QAQC_file()
 #    df_concat()
