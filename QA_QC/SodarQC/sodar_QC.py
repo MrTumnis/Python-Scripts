@@ -29,7 +29,7 @@ schema = {
     'U_Amplitude':pl.Int32, 'U_Noise':pl.Float32, 'U_SNR':pl.Float32, 'U_ValidCount':pl.Float32
 }
 
-
+#for reference
 columns = {
     'TIMESTAMP','VectorWindSpeed','VectorWindDirection','SpeedDirectionReliability',
     'W_Speed','W_Reliability', 'W_Count','W_StandardDeviation',
@@ -46,7 +46,7 @@ def read_file(file_path, height=None) -> dict:
 
     null_items = ['TIMESTAMP', 'm/s', '\u00B0', ""]
     
-    #range gates
+    #range gates 
     lazy_dict = {'30':'','35':'','40':'','45':'','50':'','55':'',
               '60':'','65':'','70':'','75':'','80':'','85':'',
               '90':'','95':'','100':'','105':'','110':'','115':'',
@@ -70,7 +70,7 @@ def read_file(file_path, height=None) -> dict:
                 .scan_csv(f'{file_path}/Wauna_SODAR{h}_Table15.csv', has_header=True, null_values=null_items, raise_if_empty=True)
                 .with_columns(pl
                     .col('TIMESTAMP').str
-                    .to_datetime('%Y-%m-%d %H:%M:%S', strict=False)).cast(schema)
+                    .to_datetime('%Y-%m-%d %H:%M:%S',time_unit=None, time_zone=None, strict=False)).cast(schema)
             )
             lazy_dict.update({h:file})
 
@@ -338,15 +338,16 @@ def df_merge() -> pl.DataFrame:
     common_columns = set(df5.columns) & set(lf.columns)
 
     # Replace columns in original dataframe with the check values
-    fnl_df = lf.with_columns([df5[col].alias(col) for col in common_columns])
+    df6 = lf.with_columns([df5[col].alias(col) for col in common_columns])
    
     fnl_dict = {}
     f = 30
     while f < 141 :
         f2 = f + 100 #quick way to exclude the files in the 100's in the iteration. i.e not returning 140m with the 40m file
-        split_df = fnl_df.select('TIMESTAMP',(cs.ends_with(f'{f}')) & (cs.exclude(cs.ends_with(f'{f2}'))))
+        split_df = df6.select('TIMESTAMP',(cs.ends_with(f'{f}')) & (cs.exclude(cs.ends_with(f'{f2}'))))
         named_df = split_df.rename(lambda column_name:column_name.strip(f'_{f}'))
-        fnl_dict.update({f:named_df}) 
+        fnl_df = named_df.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d %H:%M:%S'))
+        fnl_dict.update({f:fnl_df}) 
 
         f += 5
 
