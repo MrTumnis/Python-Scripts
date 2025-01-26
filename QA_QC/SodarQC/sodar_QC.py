@@ -121,36 +121,37 @@ def speed_profile_check() -> list:
     h = 30
     h2 = h + 5
     
-    '''perform a difference check on the adjacent range gates and return a 9 if pass, and a 2 to flag '''
+    '''perform a difference check on the absolute value of adjacent range gates and return a 9 if pass, and a 2 to flag '''
     while h < 145: 
+
         w_df = lf.select(pl
-                         .when(pl.col('TIMESTAMP').dt.hour().is_between(10,17) & (pl.col(f'W_Speed_{h}') - pl.col(f'W_Speed_{h2}').abs() >= 2))
+                         .when(pl.col('TIMESTAMP').dt.hour().is_between(10,17) & (pl.col(f'W_Speed_{h}').abs() - pl.col(f'W_Speed_{h2}').abs() >= 2))
                          .then(2)
                          .otherwise(9)
                          .alias(f'W_Speed_Check_{h}')).cast(pl.UInt32)
-        
         speed_list.append(w_df)
+
         u_df = lf.select(pl
-                        .when(pl.col('TIMESTAMP').dt.hour().is_between(10,17) & (pl.col(f'U_Speed_{h}') - pl.col(f'U_Speed_{h2}').abs() >= 2))
+                        .when(pl.col('TIMESTAMP').dt.hour().is_between(10,17) & (pl.col(f'U_Speed_{h}').abs() - pl.col(f'U_Speed_{h2}').abs() >= 2))
                         .then(2)
                         .otherwise(9)
                         .alias(f'U_Speed_Check_{h}')).cast(pl.UInt32)
-
         speed_list.append(u_df)
+        
         v_df = lf.select(pl
-                       .when(pl.col('TIMESTAMP').dt.hour().is_between(10,17) & (pl.col(f'V_Speed_{h}') - pl.col(f'V_Speed_{h2}').abs() >= 2))
+                       .when(pl.col('TIMESTAMP').dt.hour().is_between(10,17) & (pl.col(f'V_Speed_{h}').abs() - pl.col(f'V_Speed_{h2}').abs() >= 2))
                        .then(2)
                        .otherwise(9)
                        .alias(f'V_Speed_Check_{h}')).cast(pl.UInt32)
-        
         speed_list.append(v_df)
+
         vec_df = lf.select(pl
-                       .when(pl.col('TIMESTAMP').dt.hour().is_between(10,17) & (pl.col(f'VectorWindSpeed_{h}') - pl.col(f'VectorWindSpeed_{h2}').abs() >= 5))
+                       .when(pl.col('TIMESTAMP').dt.hour().is_between(10,17) & (pl.col(f'VectorWindSpeed_{h}').abs() - pl.col(f'VectorWindSpeed_{h2}').abs() >= 5))
                        .then(2)
                        .otherwise(9)
                        .alias(f'VectorWindSpeed_Check_{h}')).cast(pl.UInt32)
-        
         speed_list.append(vec_df)
+
         h +=5 
 
     return speed_list
@@ -288,19 +289,21 @@ def df_merge() -> pl.DataFrame:
     lf4 = pl.concat(echo_check(), how='horizontal', parallel=True).collect()
     lf5 = pl.concat(precip_check(), how='horizontal', parallel=True).collect()
     df1 = pl.concat([lf,lf1,lf2,lf3,lf4,lf5], how='horizontal', parallel=True)
-    check_list = []
+    check_dict = {} 
+    df_time = lf.select('TIMESTAMP')
+
     '''Return the minimum validity code (2 or 9) for each check as the reliabilty for each wind component. Precip_Check flag sets the validity to 3'''
     h = 30
     while h < 141:
-        w_df = df1.select(pl
+        df2 = df1.select(pl
             .when(pl.col(f'Precip_Check_{h}') < 4)
             .then(3)
             .otherwise(pl
             .min_horizontal([(f'W_Speed_Check_{h}'),(f'STD_Reliability_{h}'),(f'Echo_Check_{h}'),(f'Noise_Check_{h}')]))
             .alias(f'W_Reliability_{h}').cast(pl.UInt32)
         )
-
-        v_df = df1.select(pl
+        
+        df3 = df1.select(pl
             .when(pl.col(f'Precip_Check_{h}') < 4)
             .then(3)
             .otherwise(pl
@@ -308,8 +311,7 @@ def df_merge() -> pl.DataFrame:
             .alias(f'V_Reliability_{h}').cast(pl.UInt32)
         )
 
-
-        u_df = df1.select(pl
+        df4 = df1.select(pl
             .when(pl.col(f'Precip_Check_{h}') < 4)
             .then(3)
             .otherwise(pl
@@ -317,17 +319,41 @@ def df_merge() -> pl.DataFrame:
             .alias(f'U_Reliability_{h}').cast(pl.UInt32)
         )
 
-        wvu_df = pl.concat([w_df,v_df,u_df], how='horizontal')
-       # names = wvu_df.collect_schema().names()
-        check_list.append(wvu_df)
 
+        wvu_df = pl.concat([df2,df3,df4], how='horizontal')
+        time_df = df_time.hstack(wvu_df)
+        check_dict.update({h:time_df}) 
 
         h += 5
 
-        
-    # df2 = lf.with_columns(col_names)
-    # print(df2)
-    # return df2.collect() 
+    h_list = []
+    for h in range(35,141,5):
+        h_list.append(check_dict[h])
+    
+    df5 = check_dict[30]
+
+    for df in h_list: 
+        df5 = df5.join(df, on='TIMESTAMP', how='inner', coalesce=False)
+    
+    common_columns = set(df5.columns) & set(lf.columns)
+
+    # Replace columns in df1 with values from df2 if they have the same name
+    fnl_df = lf.with_columns([df5[col].alias(col) for col in common_columns])
+    
+    # check_names = df5.collect_schema().names()
+    # lf_names = lf.collect_schema().names()
+  #  fnl_df = df5.join(lf, on='TIMESTAMP', how='inner', maintain_order='left', coalesce=None)
+
+    # fnl_df = merged_df.with_columns(pl.all().name.map()
+    #fnl_df = merged_df.drop(check_names)
+
+
+
+    ic(fnl_df)
+    return fnl_df
+
+
+
 
 def QAQC_file():
 #    try:
