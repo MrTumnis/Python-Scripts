@@ -52,9 +52,10 @@ def read_file(height=None) -> dict:
         file = glob.glob(os.path.join('*GPWauna*'))
         file_path = file[0]
         
-    except Exception as e:
-        logging.error(f"Error reading file: {e}")
-        print(f"Error reading file: {e}")
+    except: 
+        logging.error(f"No file detected")
+        print(f"No file detected")
+        sys.exit()
 
     try:
         if file_path.endswith('.zip'):
@@ -380,9 +381,9 @@ def df_merge(args):
 
 if __name__ == '__main__': 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-l', '--longform', action='store_true' ,help="Print a csv of QC'd files combined")
-    parser.add_argument('-d', '--dat', action='store_true' ,help="Print a dat of QC'd files")
-    parser.add_argument('-v', '--version', action='store_true', help="Show the versions of used dependencies")
+    parser.add_argument('-l', '--longform', action='store_true' ,help="Export a file in csv of QC'd files combined")
+    parser.add_argument('-d', '--dat', action='store_true' ,help="Export range seperated files as .dat for data upload (default is csv)")
+    parser.add_argument('-v', '--version', action='store_true', help="Show the versions of libraries")
     args = parser.parse_args()
 
     if args.version:

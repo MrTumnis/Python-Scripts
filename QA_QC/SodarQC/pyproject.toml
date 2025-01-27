@@ -4,5 +4,4 @@ version = "0.1.0"
 description = "Quality check each range gate of the sodar VT-1"
 readme = "README.md"
 requires-python = ">=3.9"
-dependencies = ["polars>=1.21.0"]
-optional = ["rich"]
+dependencies = ["polars==1.21.0"]
