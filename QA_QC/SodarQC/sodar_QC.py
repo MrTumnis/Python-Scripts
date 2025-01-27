@@ -1,4 +1,4 @@
-#!/{HOME}/{USER}/myenv/bin/python
+#!/.venv/bin/python
 
 import polars as pl
 import polars.selectors as cs
@@ -9,12 +9,6 @@ import glob
 import os
 import argparse
 import sys
-
-from icecream import ic
-from rich import print 
-from rich.traceback import install
-
-install()
 
 logging.basicConfig(filename = 'log_sodarQC.log',
                     format = '%(asctime)s %(message)s',
@@ -363,15 +357,17 @@ def df_merge(args):
             f2 = f + 100 #quick way to exclude the files in the 100's in the iteration. i.e not returning 140m with the 40m file
             split_df = long_df.select('TIMESTAMP',(cs.ends_with(f'{f}')) & (cs.exclude(cs.ends_with(f'{f2}'))))
             named_df = split_df.rename(lambda column_name:column_name.strip(f'_{f}'))
-            fnl_df = named_df.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d %H:%M:%S'))
-            fnl_dict.update({f:fnl_df}) 
+            if args.dat:
+                fnl_df = named_df.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d %H:%M:%S')) 
+                fnl_dict.update({f:fnl_df}) 
+            else:
+                fnl_df = named_df.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d %H:%M:%S'))
+                fnl_dict.update({f:fnl_df}) 
 
             f += 5
 
-        if args.explain:
-           print(lf1.explain()) 
 
-        elif args.longform:
+        if args.longform:
             longform = long_df.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d %H:%M:%S'))
             return longform
 
@@ -385,7 +381,7 @@ def df_merge(args):
 if __name__ == '__main__': 
     parser = argparse.ArgumentParser()
     parser.add_argument('-l', '--longform', action='store_true' ,help="Print a csv of QC'd files combined")
-    parser.add_argument('-e', '--explain', action='store_true', help="Show the steps taken for the calculations of each check")
+    parser.add_argument('-d', '--dat', action='store_true' ,help="Print a dat of QC'd files")
     parser.add_argument('-v', '--version', action='store_true', help="Show the versions of used dependencies")
     args = parser.parse_args()
 
@@ -393,21 +389,29 @@ if __name__ == '__main__':
         pl.show_versions()
         sys.exit()
 
-    date = datetime.datetime.now()
+    else:
 
-    try:
-        merged_df = df_merge(args)
+        date = datetime.datetime.now()
 
-        if args.longform:
-            merged_df.write_csv(date.strftime("%Y%m%d") + '-' + 'SODAR_QA-QC_longform' + '.csv', include_header=True)
+        try:
+            merged_df = df_merge(args)
 
-        else:
-            for h, lf in merged_df.items():
-                df = lf.collect()
-                df.write_csv(date.strftime("%Y%m%d") + '-' + f'SODAR{h}_QA-QC' + '.csv', include_header=True)
+            if args.longform:
+                df = merged_df.collect()
+                df.write_csv(date.strftime("%Y%m%d") + '-' + 'SODAR_QA-QC_longform' + '.csv', include_header=True)
+    
+            elif args.dat:
+                for h, lf in merged_df.items():
+                    df = lf.collect()
+                    df.write_csv(f'SODAR{h}' + '.dat', include_header=False, quote_char='"', quote_style='non_numeric')
 
-    except Exception as e:
-        logging.error(f"Error writing to csv: {e}")
-        print(f"Error writing to csv: {e}")
+            else:
+                for h, lf in merged_df.items():
+                    df = lf.collect()
+                    df.write_csv(date.strftime("%Y%m%d") + '-' + f'SODAR{h}_QA-QC' + '.csv', include_header=True)
+
+        except Exception as e:
+            logging.error(f"Error writing to csv: {e}")
+            print(f"Error writing to csv: {e}")
 
 
