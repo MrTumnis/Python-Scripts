@@ -12,7 +12,7 @@ import sys
 
 logging.basicConfig(filename = 'log_sodarQC.log',
                     format = '%(asctime)s %(message)s',
-                    filemode='w')
+                    filemode='a')
 
 
 schema = {
@@ -133,28 +133,28 @@ def speed_profile_check() -> list:
         while h < 145: 
 
             w_df = lf.select(pl
-                             .when(pl.col('TIMESTAMP').dt.hour().is_between(10,17) & (pl.col(f'W_Speed_{h}').abs() - pl.col(f'W_Speed_{h2}').abs() >= 2))
+                             .when(pl.col(f'W_Speed_{h}').abs() - pl.col(f'W_Speed_{h2}').abs() >= 2)
                              .then(2)
                              .otherwise(9)
                              .alias(f'W_Speed_Check_{h}')).cast(pl.UInt32)
             speed_list.append(w_df)
 
             u_df = lf.select(pl
-                            .when(pl.col('TIMESTAMP').dt.hour().is_between(10,17) & (pl.col(f'U_Speed_{h}').abs() - pl.col(f'U_Speed_{h2}').abs() >= 2))
+                            .when(pl.col(f'U_Speed_{h}').abs() - pl.col(f'U_Speed_{h2}').abs() >= 2)
                             .then(2)
                             .otherwise(9)
                             .alias(f'U_Speed_Check_{h}')).cast(pl.UInt32)
             speed_list.append(u_df)
             
             v_df = lf.select(pl
-                           .when(pl.col('TIMESTAMP').dt.hour().is_between(10,17) & (pl.col(f'V_Speed_{h}').abs() - pl.col(f'V_Speed_{h2}').abs() >= 2))
+                           .when(pl.col(f'V_Speed_{h}').abs() - pl.col(f'V_Speed_{h2}').abs() >= 2)
                            .then(2)
                            .otherwise(9)
                            .alias(f'V_Speed_Check_{h}')).cast(pl.UInt32)
             speed_list.append(v_df)
 
             vec_df = lf.select(pl
-                           .when(pl.col('TIMESTAMP').dt.hour().is_between(10,17) & (pl.col(f'VectorWindSpeed_{h}').abs() - pl.col(f'VectorWindSpeed_{h2}').abs() >= 5))
+                           .when(pl.col(f'VectorWindSpeed_{h}').abs() - pl.col(f'VectorWindSpeed_{h2}').abs() >= 5)
                            .then(2)
                            .otherwise(9)
                            .alias(f'VectorWindSpeed_Check_{h}')).cast(pl.UInt32)
