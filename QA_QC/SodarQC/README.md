@@ -14,27 +14,34 @@ For example, if the absolute value of the 30m and 40m vertical wind speeds diffe
 If the if the absolute value of the 30m and 40m horizontal wind speeds differ by more than 5, the
 validity code should be set to 2
 
-Perform Vector Speed Profile Check: This test compares the change in the vector speed
+[Perform Vector Speed Profile Check]
+This test compares the change in the vector speed
 between adjacent levels (range gates) against the user-specified maximum change allowed. The
 default criterion suggested is 5 m/s.
 
 For example, if the absolute value of the 30m and 40m vector speeds differ by more than 5 m/s,
 the validity code should be set to 2.
 
-[Perform Component Standard Deviation Check: This check compares the wind speed]
+[Perform Component Standard Deviation Check] 
+This check compares the wind speed
 standard deviation for each component against the user-specified maximum allowed for the W
 (vertical) and U/V (horizontal) components.
+
 The default criteria suggested are 1 m/s for the W component, 5 m/s for the U and V compo-
 nents, and 5 for the U/V ratio.
-If std dev of W is &gt; 1 m/s or if the std dev of U and W &gt; 5 m/s or if U/V ratio &gt; 5, an exception
+
+If standard deviation of W is > 1 m/s or if the standard deviation of U and W > 5 m/s or if U/V ratio > 5, an exception
 has occurred.
 
 When an exception is identified, the reliability value for the data is set to 2.
-Perform Noise Check: This option checks for noise contamination by looking for intervals
+
+[Perform Noise Check]
+This option checks for noise contamination by looking for intervals
 when component intensity values increase with height and the vector speed decreases with
 height. In most situations, this test should be performed only during the daytime hours when the
 signal intensity can be expected to decrease with height. By default, this check looks only at data
 between 10:00 and 17:00, but different start and stop hours can be specified.
+
 When an exception is identified, the date/time, the height, and the component are recorded in the
 scan log. The reliability value for the data is set to 2.
 
