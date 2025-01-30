@@ -1,4 +1,4 @@
-SODAR QA
+SODAR QC
 If raw data has a validity code of 0 it is invalid. If it has a validity code of 9 it is valid.
 
 [Perform Component Speed Profile Check]
