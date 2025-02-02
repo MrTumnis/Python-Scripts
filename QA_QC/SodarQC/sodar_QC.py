@@ -1,4 +1,10 @@
 #!/.venv/bin/python
+# /// script
+# requires-python = ">=3.9"
+# dependencies = [
+#     "polars",
+# ]
+# ///
 
 import polars as pl
 import polars.selectors as cs
@@ -51,10 +57,11 @@ def read_file(height=None) -> dict:
     try:
         file = glob.glob(os.path.join('*GPWauna*'))
         file_path = file[0]
+       # file_path= 'GPWauna.zip'
         
     except: 
-        logging.error(f"No file detected")
-        print(f"No file detected")
+        logging.error(f"No file detected.")
+        print(f"\nNo file detected. Is the file in the current directory?\n")
         sys.exit()
 
     try:
@@ -358,6 +365,7 @@ def df_merge(args):
             f2 = f + 100 #quick way to exclude the files in the 100's in the iteration. i.e not returning 140m with the 40m file
             split_df = long_df.select('TIMESTAMP',(cs.ends_with(f'{f}')) & (cs.exclude(cs.ends_with(f'{f2}'))))
             named_df = split_df.rename(lambda column_name:column_name.strip(f'_{f}'))
+                
             if args.dat:
                 fnl_df = named_df.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d %H:%M:%S')) 
                 fnl_dict.update({f:fnl_df}) 
@@ -368,7 +376,13 @@ def df_merge(args):
             f += 5
 
 
-        if args.longform:
+        if args.qafile:
+            qafile = df1.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d %H:%M:%S')).transpose(include_header=True)
+            print(qafile)
+            return qafile
+
+
+        elif args.longform:
             longform = long_df.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d %H:%M:%S'))
             return longform
 
@@ -383,6 +397,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-l', '--longform', action='store_true' ,help="Export a file in csv of QC'd files combined")
     parser.add_argument('-d', '--dat', action='store_true' ,help="Export range seperated files as .dat for data upload (default is csv)")
+    parser.add_argument('-q', '--qafile', action='store_true', help="output csv with all checks for comparison")
     parser.add_argument('-v', '--version', action='store_true', help="Show the versions of libraries")
     args = parser.parse_args()
 
@@ -397,7 +412,12 @@ if __name__ == '__main__':
         try:
             merged_df = df_merge(args)
 
-            if args.longform:
+            if args.qafile:
+                df = merged_df
+                df.write_csv(date.strftime("%Y%m%d") + '-' + 'SODAR_QA-QC-CheckFile' + '.csv', include_header=True)
+
+
+            elif args.longform:
                 df = merged_df.collect()
                 df.write_csv(date.strftime("%Y%m%d") + '-' + 'SODAR_QA-QC_longform' + '.csv', include_header=True)
     
