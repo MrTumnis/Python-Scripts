@@ -55,9 +55,9 @@ def read_file(height=None) -> dict:
               '120':'','125':'','130':'','135':'','140':''}
  
     try:
-        file = glob.glob(os.path.join('*GPWauna*'))
-        file_path = file[0]
-       # file_path= 'GPWauna.zip'
+         # file = glob.glob(os.path.join('*GPWauna*'))
+         # file_path = file[0]
+         file_path= 'GPWauna.zip'
         
     except: 
         logging.error(f"No file detected.")
@@ -184,16 +184,16 @@ def standard_dev_check() -> list:
         h = 30
         while h < 145:          
             condition = (
-                   pl.col(f'W_StandardDeviation_{h}') > 1) | (
+                       pl.col(f'W_StandardDeviation_{h}') > 1) | (
                        pl.col(f'U_StandardDeviation_{h}') + pl.col(f'W_StandardDeviation_{h}') > 5) | (
                        pl.col(f'V_StandardDeviation_{h}') / pl.col(f'U_StandardDeviation_{h}') > 5)
                 
-            df = lf.select(
-                        pl.when(condition)
+            df = lf.select(pl
+                        .when(condition)
                         .then(2)
                         .otherwise(9)
                         .alias(f'STD_Reliability_{h}')
-                         .cast(pl.UInt32)
+                        .cast(pl.UInt32)
                     )
             
             h += 5
@@ -298,9 +298,8 @@ def precip_check():
     
 
 
-#merge all QC columns into one Dataframe and compare the validity of each range gate, then return the lowest number as the valid code. 
 def df_merge(args):
-    try:
+     try:
         lf = lf_merge()
         lf1 = pl.concat(speed_profile_check(), how='horizontal', parallel=True)
         lf2 = pl.concat(standard_dev_check(), how='horizontal', parallel=True)
@@ -308,6 +307,7 @@ def df_merge(args):
         lf4 = pl.concat(echo_check(), how='horizontal', parallel=True)
         lf5 = pl.concat(precip_check(), how='horizontal', parallel=True)
         df1 = pl.concat([lf,lf1,lf2,lf3,lf4,lf5], how='horizontal', parallel=True).collect()
+        qa_file = pl.concat([lf1,lf2,lf3,lf4,lf5],how='horizontal',parallel=True).collect()
         check_dict = {} 
         df_time = df1.select('TIMESTAMP')
 
@@ -359,27 +359,25 @@ def df_merge(args):
         common_columns = set(df5.columns) & set(lf2.columns)
         long_df= lf.with_columns([df5[col].alias(col) for col in common_columns])
        
-        fnl_dict = {}
-        f = 30
-        while f < 141 :
-            f2 = f + 100 #quick way to exclude the files in the 100's in the iteration. i.e not returning 140m with the 40m file
-            split_df = long_df.select('TIMESTAMP',(cs.ends_with(f'{f}')) & (cs.exclude(cs.ends_with(f'{f2}'))))
-            named_df = split_df.rename(lambda column_name:column_name.strip(f'_{f}'))
-                
-            if args.dat:
-                fnl_df = named_df.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d %H:%M:%S')) 
-                fnl_dict.update({f:fnl_df}) 
-            else:
-                fnl_df = named_df.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d %H:%M:%S'))
-                fnl_dict.update({f:fnl_df}) 
+        if args.qafile | args.transpose:
+            df1 = df_time.hstack(qa_file)
+            qc_dict = {}
+            t = 30
+            while t < 141:
+                t2 = t + 100 
+                sort = df1.select('TIMESTAMP', (cs.ends_with(f'{t}')) & (cs.exclude(cs.ends_with(f'{t2}'))))
+                qc_dict.update({t:sort})
+                t += 5
 
-            f += 5
+            df2 = qc_dict[30]
+            i = 35
+            while i < 145:
+                df2 = df2.join(qc_dict[i],on='TIMESTAMP', how='inner')
+                i+=5
 
+            qc_df = df2.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d %H:%M:%S'))
 
-        if args.qafile:
-            qafile = df1.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d %H:%M:%S')).transpose(include_header=True)
-            print(qafile)
-            return qafile
+            return qc_df 
 
 
         elif args.longform:
@@ -387,49 +385,73 @@ def df_merge(args):
             return longform
 
         else:
+            fnl_dict = {}
+            f = 30
+            while f < 141 :
+                f2 = f + 100 #quick way to exclude the files in the 100's from the iteration. i.e not returning 140m with the 40m file
+                split_df = long_df.select('TIMESTAMP',(cs.ends_with(f'_{f}')) & (cs.exclude(cs.ends_with(f'_{f2}'))))
+                
+                named_df = split_df.rename(lambda column_name:column_name.strip(f'_{f}'))
+                fnl_df = named_df.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d %H:%M:%S')).collect()
+                fnl_dict.update({f:fnl_df}) 
+
+                f += 5
+
             return fnl_dict
 
-    except Exception as e:
+     except Exception as e:
         logging.error(f"Error in processing final dataframe: {e}")
 
 
 if __name__ == '__main__': 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-l', '--longform', action='store_true' ,help="Export a file in csv of QC'd files combined")
     parser.add_argument('-d', '--dat', action='store_true' ,help="Export range seperated files as .dat for data upload (default is csv)")
+    parser.add_argument('-l', '--longform', action='store_true' ,help="Export a file in csv of QC'd files combined")
     parser.add_argument('-q', '--qafile', action='store_true', help="output csv with all checks for comparison")
+    parser.add_argument('-t', '--transpose', action='store_true', help="View the checks in csv horizontally")
     parser.add_argument('-v', '--version', action='store_true', help="Show the versions of libraries")
     args = parser.parse_args()
-
+    
+    #likely an easier and better way to get start and end time of file range 
+    date_df = read_file('30')
+    date = date_df.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d')).collect()
+    date_start = date[1,0]
+    date_end = date[-1,0]
+            
     if args.version:
         pl.show_versions()
         sys.exit()
 
     else:
-
-        date = datetime.datetime.now()
-
         try:
+            os.makedirs('GPWauna-QA_QC', exist_ok=True)
+            path = './GPWauna-QA_QC/'
             merged_df = df_merge(args)
-
-            if args.qafile:
-                df = merged_df
-                df.write_csv(date.strftime("%Y%m%d") + '-' + 'SODAR_QA-QC-CheckFile' + '.csv', include_header=True)
-
+            
+            if args.qafile | args.transpose:
+                if args.transpose:
+                    df = merged_df.transpose(include_header=True)
+                    file = str(date_start + '_' + date_end  + '_' + 'SODAR-Checkfile-Transpose' + '.csv')
+                    df.write_csv(file=f'{path}/{file}',include_header=False, float_scientific=False, float_precision=2)
+                else:
+                    df = merged_df
+                    file = str(date_start + '_' + date_end  + '_' + 'SODAR_QA-QC_Checkfile' + '.csv')
+                    df.write_csv(file=f'{path}/{file}', include_header=True,float_scientific=False, float_precision=2)
 
             elif args.longform:
                 df = merged_df.collect()
-                df.write_csv(date.strftime("%Y%m%d") + '-' + 'SODAR_QA-QC_longform' + '.csv', include_header=True)
-    
+                file = str(date_start + '_' + date_end + '_' + 'SODAR-longform' + '.csv' )
+                df.write_csv(file=f'{path}/{file}' ,include_header=True, float_scientific=False, float_precision=2)
+
             elif args.dat:
-                for h, lf in merged_df.items():
-                    df = lf.collect()
-                    df.write_csv(f'SODAR{h}' + '.dat', include_header=False, quote_char='"', quote_style='non_numeric')
+                for h, df in merged_df.items():
+                    file = str(f'SODAR{h}' + '.dat') 
+                    df.write_csv(file=f'{path}/{file}', include_header=False, quote_char='"', quote_style='non_numeric',float_precision=2)
 
             else:
-                for h, lf in merged_df.items():
-                    df = lf.collect()
-                    df.write_csv(date.strftime("%Y%m%d") + '-' + f'SODAR{h}_QA-QC' + '.csv', include_header=True)
+                for h, df in merged_df.items():
+                    file = str(date_start + '_' + date_end + '_' + f'SODAR{h}_QA-QC' + '.csv')
+                    df.write_csv(file=f'{path}/{file}' ,include_header=True, float_precision=2)
 
         except Exception as e:
             logging.error(f"Error writing to csv: {e}")
