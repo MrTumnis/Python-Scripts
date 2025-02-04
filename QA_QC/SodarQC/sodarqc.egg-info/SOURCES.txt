@@ -1,0 +1,8 @@
+README.md
+pyproject.toml
+sodar_QC.py
+sodarqc.egg-info/PKG-INFO
+sodarqc.egg-info/SOURCES.txt
+sodarqc.egg-info/dependency_links.txt
+sodarqc.egg-info/requires.txt
+sodarqc.egg-info/top_level.txt

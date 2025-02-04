@@ -1,6 +1,6 @@
 [project]
 name = "sodarqc"
-version = "0.1.0"
+version = "0.1.1"
 description = "Quality check each range gate of the sodar VT-1"
 readme = "README.md"
 requires-python = ">=3.9"
