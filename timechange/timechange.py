@@ -1,14 +1,17 @@
 #!/{HOME}/{USER}/myenv/bin/python
 
 import sys 
+import os
 import numpy as np
 import datetime
+import glob
 import pandas as pd
 from icecream import ic
 from rich import print as rprint
 from rich.console import Console
 from rich.theme import Theme
 from rich.prompt import Prompt
+from simple_term_menu import TerminalMenu
 
 
 custom_theme = Theme({
@@ -84,7 +87,11 @@ def time_change():
     freq = [15, 30, 60, 1440]
 
     try:
-        time = Prompt.ask("What frequency would you like to change the file to? [violet]15, 30, 60, 1440?[/violet] (or [red]'exit'[/red] to quit) ")
+        options = ['15','30','60','1440','exit']
+        files_menu = TerminalMenu(options, title=console.print(f'What aggregation would you like to convert to?'))
+        selection = files_menu.show()
+        time = options[selection]
+
         if time == 'exit':
             sys.exit()
 
@@ -149,11 +156,14 @@ def time_change():
                 ag_list = ['avg', 'sum', 'min', 'max']
                 user_input = {}
 
+
                 i = 0
                 while i < len(df_list): 
                     for item in df_list:
-                        input = Prompt.ask(f"What would you like to do for [bold green]{item}[/bold green]? Enter: avg, sum, min, or max. ")
-                        value = input.lower()
+                        options = ['avg', 'sum', 'min', 'max']
+                        files_menu = TerminalMenu(options, title=console.print(f'What aggregation would you like for [bold green]{item}[/bold green]?'))
+                        selection = files_menu.show()
+                        value = options[selection]
 
                         if value in ag_list:
                             user_input.update({item:value})
@@ -203,15 +213,14 @@ def time_file():
         sys.exit()
 
 if __name__ == '__main__':
-
+   
     while True:
-        file_path = Prompt.ask("Enter the path to the CSV file (or [red]'exit'[/red] to quit): ")
-
-        if file_path == 'exit':
-            rprint("Exiting the program.")
-            sys.exit()
-
-        elif file_path.endswith(".csv"):
+        files = glob.glob(os.path.join('*.csv'))
+        files_menu = TerminalMenu(files, title='Select a csv file')
+        index = files_menu.show()
+        file_path = files[index] 
+        
+        if file_path.endswith(".csv"):
             break  
 
         else:
