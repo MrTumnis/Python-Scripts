@@ -16,7 +16,6 @@ import pandas as pd
 from rich import print as rprint
 from rich.console import Console
 from rich.theme import Theme
-from rich.prompt import Prompt
 from simple_term_menu import TerminalMenu
 
 
@@ -35,9 +34,11 @@ def file_read(file_path):
         for row in df.head(n=1).itertuples():
             if any(isinstance(item, float) for item in row):
                 df = df.drop(0)
+
         for col in df.columns:
             if col == 'STATION':
                 df = df.drop('STATION', axis=1)
+
         df1 = pd.to_datetime(df['TIMESTAMP'], errors='coerce')
         df1 = df1.to_frame()
         df = df.iloc[:,1:].astype(float)
@@ -67,19 +68,19 @@ def time_check():
     time = str(df['diff_check'].mode()[0]) 
 
     if time == fifteen_min:
-        rprint(f"This is a 15-min file")
+        rprint("This is a 15-min file")
         time = 15 
     elif time == thirty_min:
-        rprint(f"This is a 30-min file")
+        rprint("This is a 30-min file")
         time = 30
     elif time == one_hour:
-        rprint(f"This is a 60-min file")
+        rprint("This is a 60-min file")
         time = 60
     elif time == one_day:
-        rprint(f"This is a Daily file")
+        rprint("This is a Daily file")
         time = 1440
     elif time == five_min:
-        rprint(f"This is a five-min file")
+        rprint("This is a five-min file")
         time = 5
     else:
         console.print (f"{time} is an unsupported time interval", style='error')
@@ -94,7 +95,7 @@ def time_change():
 
     try:
         options = ['15','30','60','1440','exit']
-        files_menu = TerminalMenu(options, title=console.print(f'What aggregation would you like to convert to?'))
+        files_menu = TerminalMenu(options, title=console.print('What aggregation would you like to convert to?'))
         selection = files_menu.show()
         time = options[selection]
 
