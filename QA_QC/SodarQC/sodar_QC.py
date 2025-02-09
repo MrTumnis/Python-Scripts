@@ -13,8 +13,11 @@ import datetime
 import zipfile
 import glob
 import os
+import re
 import argparse
 import sys
+from simple_term_menu import TerminalMenu
+
 
 logging.basicConfig(filename = 'log_sodarQC.log',
                     format = '%(asctime)s %(message)s',
@@ -55,34 +58,24 @@ def read_file(height=None) -> dict:
               '120':'','125':'','130':'','135':'','140':''}
  
     try:
-         # file = glob.glob(os.path.join('*GPWauna*'))
-         # file_path = file[0]
-         file_path= 'GPWauna.zip'
-        
-    except: 
-        logging.error(f"No file detected.")
-        print(f"\nNo file detected. Is the file in the current directory?\n")
-        sys.exit()
+        # file_list = glob.glob(os.path.join('*GPWauna*'))
+        # files_menu = TerminalMenu(file_list, title=(f'Choose the path of the Sodar files. (can be a .zip file)'))
+        # selection = files_menu.show()
+        # file_path = file_list[selection]
+        file_path = 'GPWauna_data.zip'
 
-    try:
         if file_path.endswith('.zip'):
             with zipfile.ZipFile(f'{file_path}', 'r') as zip_file:
                 file_path = file_path.strip('.zip')
                 zip_file.extractall(f'{file_path}')
 
 
-    except Exception as e:
-        logging.error(f"Error occured processing zip file {e}")
-        raise
-
-    try:
         for h in lazy_dict.keys():
-            file = (
-                pl
+            file = (pl
                 .scan_csv(f'{file_path}/Wauna_SODAR{h}_Table15.csv', has_header=True, null_values=null_items, raise_if_empty=True)
                 .with_columns(pl
-                    .col('TIMESTAMP').str
-                    .to_datetime('%Y-%m-%d %H:%M:%S',time_unit=None, time_zone=None, strict=False)).cast(schema)
+                .col('TIMESTAMP').str
+                .to_datetime('%Y-%m-%d %H:%M:%S',time_unit=None, time_zone=None, strict=False)).cast(schema)
             )
             lazy_dict.update({h:file})
 
@@ -90,7 +83,7 @@ def read_file(height=None) -> dict:
         for key, value in lazy_dict.items():
             lf = lazy_dict[key]
             lf1 = lf.rename(lambda column_name:column_name[0:] + f'_{key}')
-            #must 'collect' dataframe before returning the lazyframe or the ragne gates will not append to column names
+            #must 'collect' dataframe before returning the lazyframe or the range gates will not append to column names
             df = lf1.rename({f'TIMESTAMP_{key}':'TIMESTAMP'}).collect() 
             lf = df.lazy()
             lazy_dict.update({key:lf})
@@ -100,18 +93,19 @@ def read_file(height=None) -> dict:
             lf = lazy_dict[height]
             return lf 
 
-        #Return all files in a dictionary
+       #Return all files in a dictionary
         else:
             return lazy_dict
 
     except Exception as e:
         logging.error(f"Error occured processing file: {e}")
+        print({e})
 
 
 
 #Merge dataframes with a single header starting with the 30m file
-def lf_merge() -> pl.LazyFrame:
-    df_dic = read_file()  
+def lf_merge(df) -> pl.LazyFrame:
+    df_dic = df 
     df_list = []
     try:
         for i in range(35,141,5):
@@ -129,8 +123,7 @@ def lf_merge() -> pl.LazyFrame:
 
 
 
-def speed_profile_check() -> list:
-    lf = lf_merge()
+def speed_profile_check(lf) -> list:
     speed_list = []
     try:
         h = 30
@@ -176,8 +169,7 @@ def speed_profile_check() -> list:
     
 
 
-def standard_dev_check() -> list:
-    lf = lf_merge()
+def standard_dev_check(lf) -> list:
     lf_list = []
 
     try:
@@ -206,8 +198,7 @@ def standard_dev_check() -> list:
 
 
 
-def noise_check() -> list:
-    lf = lf_merge()
+def noise_check(lf) -> list:
     noise_list = []
     
     try:
@@ -239,8 +230,7 @@ def noise_check() -> list:
 
 
 
-def echo_check() -> list:
-    lf = lf_merge()
+def echo_check(lf) -> list:
     echo_list = []
 
     try:
@@ -272,8 +262,7 @@ def echo_check() -> list:
 
 
 
-def precip_check():
-    lf = lf_merge()
+def precip_check(lf):
     precip_list = []
 
     try:
@@ -298,53 +287,75 @@ def precip_check():
     
 
 
-def df_merge(args):
-     try:
-        lf = lf_merge()
-        lf1 = pl.concat(speed_profile_check(), how='horizontal', parallel=True)
-        lf2 = pl.concat(standard_dev_check(), how='horizontal', parallel=True)
-        lf3 = pl.concat(noise_check(), how='horizontal', parallel=True)
-        lf4 = pl.concat(echo_check(), how='horizontal', parallel=True)
-        lf5 = pl.concat(precip_check(), how='horizontal', parallel=True)
+def df_merge(lf, args):
+    try:
+        lf1 = pl.concat(speed_profile_check(lf), how='horizontal', parallel=True)
+        lf2 = pl.concat(standard_dev_check(lf), how='horizontal', parallel=True)
+        lf3 = pl.concat(noise_check(lf), how='horizontal', parallel=True)
+        lf4 = pl.concat(echo_check(lf), how='horizontal', parallel=True)
+        lf5 = pl.concat(precip_check(lf), how='horizontal', parallel=True)
         df1 = pl.concat([lf,lf1,lf2,lf3,lf4,lf5], how='horizontal', parallel=True).collect()
         qa_file = pl.concat([lf1,lf2,lf3,lf4,lf5],how='horizontal',parallel=True).collect()
         check_dict = {} 
         df_time = df1.select('TIMESTAMP')
 
-        '''Return the minimum validity code (2 or 9) for each check as the reliabilty for each wind component. Precip_Check flag sets the validity to 3'''
+        if args.qafile:
+            df = qa_file 
+        else:
+            print("remove me later")
+            df = qa_file 
+
+        '''Return the minimum validity code (0, 2, or 9) for each check as the reliabilty for each wind component. Precip_Check flag sets the validity to 3. *will likely need to seperate the "0" checks for each range gate'''
         h = 30
         while h < 141:
-            df2 = df1.select(pl
+            df2 = df.select(pl
                 .when(pl.col(f'Precip_Check_{h}') < 4)
                 .then(3)
                 .otherwise(pl
                 .min_horizontal([(f'W_Speed_Check_{h}'),(f'STD_Reliability_{h}'),(f'Echo_Check_{h}'),(f'Noise_Check_{h}')]))
-                .alias(f'W_Reliability_{h}').cast(pl.UInt32)
+                .alias(f'W_Zero{h}').cast(pl.UInt32)
             )
-            
-            df3 = df1.select(pl
+            df3 = df.select(pl
                 .when(pl.col(f'Precip_Check_{h}') < 4)
                 .then(3)
                 .otherwise(pl
                 .min_horizontal([(f'V_Speed_Check_{h}'),(f'STD_Reliability_{h}'),(f'Echo_Check_{h}'),(f'Noise_Check_{h}')]))
-                .alias(f'V_Reliability_{h}').cast(pl.UInt32)
+                .alias(f'V_Zero{h}').cast(pl.UInt32)
             )
-
-            df4 = df1.select(pl
+            df4 = df.select(pl
                 .when(pl.col(f'Precip_Check_{h}') < 4)
                 .then(3)
                 .otherwise(pl
                 .min_horizontal([(f'U_Speed_Check_{h}'),(f'STD_Reliability_{h}'),(f'Echo_Check_{h}'),(f'Noise_Check_{h}')]))
+                .alias(f'U_Zero{h}').cast(pl.UInt32)
+            )
+            zero_check = pl.concat([df1,df2,df3,df4], how='horizontal')
+
+            w_df = zero_check.select(pl
+                .when(pl.col(f'W_Reliability_{h}') == 0)
+                .then(0)
+                .otherwise(pl.col(f'W_Zero{h}'))
+                .alias(f'W_Reliability_{h}').cast(pl.UInt32)
+            )
+            v_df = zero_check.select(pl
+                .when(pl.col(f'V_Reliability_{h}') == 0)
+                .then(0)
+                .otherwise(pl.col(f'V_Zero{h}'))
+                .alias(f'V_Reliability_{h}').cast(pl.UInt32)
+            )
+            u_df = zero_check.select(pl
+                .when(pl.col(f'U_Reliability_{h}') == 0)
+                .then(0)
+                .otherwise(pl.col(f'U_Zero{h}'))
                 .alias(f'U_Reliability_{h}').cast(pl.UInt32)
             )
-
-
-            wvu_df = pl.concat([df2,df3,df4], how='horizontal')
+            wvu_df = pl.concat([w_df,v_df,u_df], how='horizontal')
             time_df = df_time.hstack(wvu_df)
             check_dict.update({h:time_df}) 
 
             h += 5
 
+        print('check',check_dict.values())
         h_list = []
         for h in range(35,141,5):
             h_list.append(check_dict[h])
@@ -360,7 +371,8 @@ def df_merge(args):
         long_df= lf.with_columns([df5[col].alias(col) for col in common_columns])
        
         if args.qafile | args.transpose:
-            df1 = df_time.hstack(qa_file)
+            # df1 = df_time.hstack(qa_file)
+            df1 = df5
             qc_dict = {}
             t = 30
             while t < 141:
@@ -399,8 +411,9 @@ def df_merge(args):
 
             return fnl_dict
 
-     except Exception as e:
-        logging.error(f"Error in processing final dataframe: {e}")
+    except Exception as e:
+       logging.error(f"Error in processing final dataframe: {e}")
+       print({e})
 
 
 if __name__ == '__main__': 
@@ -411,22 +424,32 @@ if __name__ == '__main__':
     parser.add_argument('-t', '--transpose', action='store_true', help="View the checks in csv horizontally")
     parser.add_argument('-v', '--version', action='store_true', help="Show the versions of libraries")
     args = parser.parse_args()
-    
-    #likely an easier and better way to get start and end time of file range 
-    date_df = read_file('30')
-    date = date_df.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d')).collect()
-    date_start = date[1,0]
-    date_end = date[-1,0]
-            
+
+    print('TO DO: Add a seperate function for the '0' checks to the program. Probably as another lf check and add  it as a comparison column ')    
+    #global dataframes 
+    df = read_file()
+    lf = lf_merge(df)
+
     if args.version:
         pl.show_versions()
         sys.exit()
 
     else:
+
         try:
-            os.makedirs('GPWauna-QA_QC', exist_ok=True)
-            path = './GPWauna-QA_QC/'
-            merged_df = df_merge(args)
+            #likely an easier and better way to get start and end time of file range 
+            date_df = lf 
+            date = date_df.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d')).collect()
+            date_start = date[1,0]
+            date_end = date[-1,0]
+                    
+        except:
+            logging.error("Error collecting start and end dates")
+        
+        try:
+            os.makedirs('QA-QC_GPWauna', exist_ok=True)
+            path = './QA-QC_GPWauna/'
+            merged_df = df_merge(lf, args)
             
             if args.qafile | args.transpose:
                 if args.transpose:
