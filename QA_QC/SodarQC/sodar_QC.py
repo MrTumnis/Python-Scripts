@@ -3,6 +3,7 @@
 # requires-python = ">=3.9"
 # dependencies = [
 #     "polars",
+#     "simple-term-menu",
 # ]
 # ///
 
