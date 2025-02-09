@@ -10,11 +10,9 @@
 import polars as pl
 import polars.selectors as cs
 import logging
-import datetime
 import zipfile
 import glob
 import os
-import re
 import argparse
 import sys
 from simple_term_menu import TerminalMenu
@@ -59,11 +57,10 @@ def read_file(height=None) -> dict:
               '120':'','125':'','130':'','135':'','140':''}
  
     try:
-        # file_list = glob.glob(os.path.join('*GPWauna*'))
-        # files_menu = TerminalMenu(file_list, title=(f'Choose the path of the Sodar files. (can be a .zip file)'))
-        # selection = files_menu.show()
-        # file_path = file_list[selection]
-        file_path = 'GPWauna_data.zip'
+        file_list = glob.glob(os.path.join('*GPWauna*'))
+        files_menu = TerminalMenu(file_list, title=('Choose the path of the Sodar files. (can be a .zip file)'))
+        selection = files_menu.show()
+        file_path = file_list[selection]
 
         if file_path.endswith('.zip'):
             with zipfile.ZipFile(f'{file_path}', 'r') as zip_file:
@@ -118,6 +115,7 @@ def lf_merge(df) -> pl.LazyFrame:
             df = df.lazy().join(item.lazy(), on='TIMESTAMP', how='inner') 
 
         return df
+
     except Exception as e:
         logging.error(f"Error occured merging lazyframe: {e}")
 
@@ -371,7 +369,6 @@ def df_merge(lf, args):
         long_df = lf.with_columns([df5[col].alias(col) for col in common_columns])
        
         if args.qafile | args.transpose:
-            common_col = set(df5.columns) & set(qa_file.columns)
             qa_df = qa_file.with_columns([df5[col].alias(col) for col in common_columns])
             qc_dict = {}
             t = 30
@@ -442,8 +439,8 @@ if __name__ == '__main__':
             date_start = date[1,0]
             date_end = date[-1,0]
                     
-        except:
-            logging.error("Error collecting start and end dates")
+        except Exception as e:
+            logging.error(f"Error collecting start and end dates {e}")
         
         try:
             os.makedirs(f'{date_start}_{date_end}_QA-QC_SODAR', exist_ok=True)
