@@ -93,7 +93,7 @@ def read_file(height=None) -> dict:
             lf = lazy_dict[height]
             return lf 
 
-       #Return all files in a dictionary
+        #Return all files in a dictionary
         else:
             return lazy_dict
 
@@ -139,13 +139,6 @@ def speed_profile_check(lf) -> list:
                              .alias(f'W_Speed_Check_{h}')).cast(pl.UInt32)
             speed_list.append(w_df)
 
-            u_df = lf.select(pl
-                            .when(pl.col(f'U_Speed_{h}').abs() - pl.col(f'U_Speed_{h2}').abs() >= 2)
-                            .then(2)
-                            .otherwise(9)
-                            .alias(f'U_Speed_Check_{h}')).cast(pl.UInt32)
-            speed_list.append(u_df)
-            
             v_df = lf.select(pl
                            .when(pl.col(f'V_Speed_{h}').abs() - pl.col(f'V_Speed_{h2}').abs() >= 2)
                            .then(2)
@@ -153,6 +146,13 @@ def speed_profile_check(lf) -> list:
                            .alias(f'V_Speed_Check_{h}')).cast(pl.UInt32)
             speed_list.append(v_df)
 
+            u_df = lf.select(pl
+                            .when(pl.col(f'U_Speed_{h}').abs() - pl.col(f'U_Speed_{h2}').abs() >= 2)
+                            .then(2)
+                            .otherwise(9)
+                            .alias(f'U_Speed_Check_{h}')).cast(pl.UInt32)
+            speed_list.append(u_df)
+            
             vec_df = lf.select(pl
                            .when(pl.col(f'VectorWindSpeed_{h}').abs() - pl.col(f'VectorWindSpeed_{h2}').abs() >= 5)
                            .then(2)
@@ -299,30 +299,30 @@ def df_merge(lf, args):
         check_dict = {} 
         df_time = df1.select('TIMESTAMP')
 
-        if args.qafile:
-            df = qa_file 
-        else:
-            print("remove me later")
-            df = qa_file 
+        # if args.qafile:
+        #     df = qa_file 
+        # else:
+        #     print("remove me later, and asign df1")
+        #     df = qa_file 
 
         '''Return the minimum validity code (0, 2, or 9) for each check as the reliabilty for each wind component. Precip_Check flag sets the validity to 3. *will likely need to seperate the "0" checks for each range gate'''
         h = 30
         while h < 141:
-            df2 = df.select(pl
+            df2 = df1.select(pl
                 .when(pl.col(f'Precip_Check_{h}') < 4)
                 .then(3)
                 .otherwise(pl
                 .min_horizontal([(f'W_Speed_Check_{h}'),(f'STD_Reliability_{h}'),(f'Echo_Check_{h}'),(f'Noise_Check_{h}')]))
                 .alias(f'W_Zero{h}').cast(pl.UInt32)
             )
-            df3 = df.select(pl
+            df3 = df1.select(pl
                 .when(pl.col(f'Precip_Check_{h}') < 4)
                 .then(3)
                 .otherwise(pl
                 .min_horizontal([(f'V_Speed_Check_{h}'),(f'STD_Reliability_{h}'),(f'Echo_Check_{h}'),(f'Noise_Check_{h}')]))
                 .alias(f'V_Zero{h}').cast(pl.UInt32)
             )
-            df4 = df.select(pl
+            df4 = df1.select(pl
                 .when(pl.col(f'Precip_Check_{h}') < 4)
                 .then(3)
                 .otherwise(pl
@@ -355,7 +355,6 @@ def df_merge(lf, args):
 
             h += 5
 
-        print('check',check_dict.values())
         h_list = []
         for h in range(35,141,5):
             h_list.append(check_dict[h])
@@ -368,16 +367,16 @@ def df_merge(lf, args):
         # Replace columns in original dataframe with the check values
         lf2 = lf.collect()
         common_columns = set(df5.columns) & set(lf2.columns)
-        long_df= lf.with_columns([df5[col].alias(col) for col in common_columns])
+        long_df = lf.with_columns([df5[col].alias(col) for col in common_columns])
        
         if args.qafile | args.transpose:
-            # df1 = df_time.hstack(qa_file)
-            df1 = df5
+            common_col = set(df5.columns) & set(qa_file.columns)
+            qa_df = qa_file.with_columns([df5[col].alias(col) for col in common_columns])
             qc_dict = {}
             t = 30
             while t < 141:
                 t2 = t + 100 
-                sort = df1.select('TIMESTAMP', (cs.ends_with(f'{t}')) & (cs.exclude(cs.ends_with(f'{t2}'))))
+                sort = qa_df.select('TIMESTAMP', (cs.ends_with(f'{t}')) & (cs.exclude(cs.ends_with(f'{t2}'))))
                 qc_dict.update({t:sort})
                 t += 5
 
@@ -425,7 +424,6 @@ if __name__ == '__main__':
     parser.add_argument('-v', '--version', action='store_true', help="Show the versions of libraries")
     args = parser.parse_args()
 
-    print('TO DO: Add a seperate function for the '0' checks to the program. Probably as another lf check and add  it as a comparison column ')    
     #global dataframes 
     df = read_file()
     lf = lf_merge(df)
@@ -447,8 +445,8 @@ if __name__ == '__main__':
             logging.error("Error collecting start and end dates")
         
         try:
-            os.makedirs('QA-QC_GPWauna', exist_ok=True)
-            path = './QA-QC_GPWauna/'
+            os.makedirs(f'{date_start}_{date_end}_QA-QC_SODAR', exist_ok=True)
+            path = f'./{date_start}_{date_end}_QA-QC_SODAR/'
             merged_df = df_merge(lf, args)
             
             if args.qafile | args.transpose:
