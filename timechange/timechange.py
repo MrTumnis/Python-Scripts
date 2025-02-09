@@ -1,12 +1,18 @@
 #!/{HOME}/{USER}/myenv/bin/python
+# /// script
+# requires-python = ">=3.13"
+# dependencies = [
+#     "pandas",
+#     "rich",
+#     "simple-term-menu",
+# ]
+# ///
 
 import sys 
 import os
-import numpy as np
 import datetime
 import glob
 import pandas as pd
-from icecream import ic
 from rich import print as rprint
 from rich.console import Console
 from rich.theme import Theme
