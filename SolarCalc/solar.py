@@ -2,6 +2,8 @@ import streamlit as st
 import numpy as np
 import polars as pl
 import io
+import os
+import json
 import streamlit.components.v1 as components
 from fpdf import FPDF
 
@@ -46,7 +48,7 @@ sun_day = pl.DataFrame({
     })
 sun_days = st.sidebar.selectbox( 
     'Average Sun Hours Per Day',
-     sun_day['Days'], key='sun days')
+     sun_day['Days'], key='sun_days')
 
 cloudy_day = pl.DataFrame({
     'days': [1 , 2 , 3 , 4 , 5 , 6 , 7]
@@ -60,6 +62,7 @@ panel_amps = st.sidebar.number_input("Panel Amperage", value = 0)
 
 #Main Datatable
 
+col_list = ['Solar Items', 'Amps', 'Watts']
 df = pl.DataFrame(
     [
         {"Solar Items": "Insert Solar Items Here", "Amps": 0.00, "Watts": 0.00},
@@ -68,15 +71,85 @@ df = pl.DataFrame(
     ]
 )
 
-col_list = ['Solar Items', 'Amps', 'Watts']
-col_df = st.data_editor(df, key='datatable', num_rows='dynamic', column_order= col_list, use_container_width=True)
+def save_user_input():
+    condition = (pl.col("Solar Items").str.starts_with("Insert")).not_() & ((pl.col("Amps") != 0.00) | (pl.col("Watts") != 0.00))
+    new_data = col_df.with_columns(col_list).filter(condition)
+    new_df = st.data_editor(new_data, key='new_df', column_order= col_list)
+    if 'new_df' not in st.session_state:
+        st.session_state.new_df = new_df
+    return new_df
+    
+# col_df = st.data_editor(df, key='datatable', num_rows='dynamic', column_order= col_list, use_container_width=True)
+col_df = st.data_editor(
+    df,
+    column_config={
+        "Solar Items": st.column_config.TextColumn(
+            width="medium",
+            default="Insert Solar Items Here",
+            ),
+        "Amps": st.column_config.NumberColumn(
+            min_value=0,
+            default=0,
+        ),
+        "Watts": st.column_config.NumberColumn(
+            min_value=0,
+            default=0,
+        ),
+    },
+    hide_index=True,
+    num_rows='dynamic',
+    column_order=col_list,
+    use_container_width=True,
+    disabled=False,
+)
+
+if 'datatable' not in st.session_state:
+    clear_df = col_df
+    st.session_state.datatable = pl.DataFrame(col_df)
+
+#'''Need to write a check to see if Item exists before saving'''
+if st.button("Save Items", key='save_button', help='Save the Solar Items for use at a later time'):
+    df = save_user_input()
+    if os.path.exists('./datatable.json'):
+        if os.path.getsize('./datatable.json') > 0:
+            df_json = pl.read_json('./datatable.json')
+            new_df = df.join(df_json, on=col_list, how='full', coalesce=True)
+            new_df.write_json('./datatable.json')
+        else: 
+            df.write_json('./datatable.json')
+    else:
+        df.write_json('./datatable.json')
+    st.success("Data saved!")
+
+on = st.toggle("Show Saved Items")
+
+if on:
+    if os.path.exists('./datatable.json'):
+        df = pl.read_json('./datatable.json')
+        # st.data_editor(df, use_container_width=True)
+        st.data_editor(
+            df,
+            column_config={
+                "Solar Items": st.column_config.TextColumn(
+                    width="medium",
+                    ),
+                "Amps": st.column_config.NumberColumn(
+                ),
+                "Watts": st.column_config.NumberColumn(
+                ),
+            },
+            hide_index=True,
+            use_container_width=True,
+            disabled=False,
+        )
+
+    else:
+        st.write('No Saved Items Exist')
 
 
 #'''calculations'''
 amps_tot_np = col_df.select(pl.col("Amps").sum()).to_numpy()[0]
 watt_tot_np = col_df.select(pl.col("Watts").sum() + (pl.col("Amps") * sys_voltage)).to_numpy()[0]
-# watt_hours = col_df.select((pl.col("Watts").sum() * 24)).to_numpy()[0]
-# watt_week = col_df.select((pl.col("Watts").sum() * 168 )).to_numpy()[0]
 
 watt_hour_np = col_df.select(pl.when(pl.col("Amps").sum() > 0)
                 .then((pl.col("Watts").sum() + ((pl.col('Amps').sum()) * sys_voltage)))
@@ -95,12 +168,13 @@ watt_week_np = col_df.select(pl.when(pl.col("Amps").sum() > 0)
                 .otherwise(col_df.select(pl.col("Watts").sum() * 168))).to_numpy()
 watt_week = watt_week_np[0]
 
+#'''Write a session state change for watts to amps, or amps to watts'''
 amp_week = (watt_week / sys_voltage) 
 amp_day = (amp_week / 7) * 1.2
 amps_day = (amp_week / 7) 
 amp_hour = (amp_day / 24)
 inverter_min = (watt_hour/ sys_voltage)
-solar_amps = (amp_day/ sun_days)
+solar_amps = (amp_day / sun_days)
 solar_panels = (solar_amps / panel_amps)
 batt_tot = (((amp_day / batt_dis) * cloudy_days) / batt_amps)
 amps_res = ((cloudy_days * amps_day) / batt_dis)
