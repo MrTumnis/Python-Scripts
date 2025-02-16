@@ -61,7 +61,6 @@ panel_amps = st.sidebar.number_input("Panel Amperage", value = 0)
 
 
 #Main Datatable
-
 col_list = ['Solar Items', 'Amps', 'Watts']
 df = pl.DataFrame(
     [
@@ -103,11 +102,10 @@ col_df = st.data_editor(
     disabled=False,
 )
 
+
 if 'datatable' not in st.session_state:
-    clear_df = col_df
     st.session_state.datatable = pl.DataFrame(col_df)
 
-#'''Need to write a check to see if Item exists before saving'''
 if st.button("Save Items", key='save_button', help='Save the Solar Items for use at a later time'):
     df = save_user_input()
     if os.path.exists('./datatable.json'):
@@ -123,26 +121,36 @@ if st.button("Save Items", key='save_button', help='Save the Solar Items for use
 
 on = st.toggle("Show Saved Items")
 
+
 if on:
     if os.path.exists('./datatable.json'):
         df = pl.read_json('./datatable.json')
-        # st.data_editor(df, use_container_width=True)
-        st.data_editor(
+        # del_items = [row[0] for row in df.iter_rows()]
+        del_items = df.rows()
+
+        saved_items = st.data_editor(
             df,
+            key='json',
             column_config={
-                "Solar Items": st.column_config.TextColumn(
-                    width="medium",
-                    ),
-                "Amps": st.column_config.NumberColumn(
-                ),
-                "Watts": st.column_config.NumberColumn(
-                ),
+                "Solar Items": st.column_config.TextColumn(width="medium"),
+                "Amps": st.column_config.NumberColumn(),
+                "Watts": st.column_config.NumberColumn(),
             },
             hide_index=True,
             use_container_width=True,
             disabled=False,
-        )
+        ),
 
+        del_opt = st.multiselect('Select Items to Delete from Saved File', del_items, placeholder='Items to Delete'),
+        if del_opt is not 'Items to Delete':
+            for item in del_opt:
+                for row in item:
+                   col = row[0] 
+        if st.button('Delete Items'):#, on_click=)
+            if del_opt is not 'Items to Delete':
+                df_col = df.filter(~pl.col('Solar Items').str.contains(f'^{col}$', literal=False))
+                st.write(df_col)
+                df_col.write_json('./datatable.json')
     else:
         st.write('No Saved Items Exist')
 
