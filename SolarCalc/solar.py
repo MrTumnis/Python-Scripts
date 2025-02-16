@@ -4,6 +4,7 @@ import polars as pl
 import io
 import os
 import json
+import math
 import streamlit.components.v1 as components
 from fpdf import FPDF
 
@@ -41,7 +42,7 @@ batt_voltage = st.sidebar.selectbox(
 batt_amps = st.sidebar.number_input("Battery Amperage", value = 0)
 
 discharge = st.sidebar.slider("Maximum Discharge of Batterys", 0, 100, (80), step=5)
-batt_dis = (discharge * .01)
+batt_discharge = (discharge * .01)
 
 sun_day = pl.DataFrame({
     'Days': [3, 4, 5, 6, 7]
@@ -149,7 +150,6 @@ if on:
         if st.button('Delete Items'):#, on_click=)
             if del_opt is not 'Items to Delete':
                 df_col = df.filter(~pl.col('Solar Items').str.contains(f'^{col}$', literal=False))
-                st.write(df_col)
                 if df_col.is_empty(): 
                     os.remove('./datatable.json')
                     st.write('No Saved Items Exist')
@@ -160,51 +160,97 @@ if on:
 
 
 #'''calculations'''
-amps_tot_np = col_df.select(pl.col("Amps").sum()).to_numpy()[0]
+
 watt_tot_np = col_df.select(pl.col("Watts").sum() + (pl.col("Amps") * sys_voltage)).to_numpy()[0]
 
-watt_hour_np = col_df.select(pl.when(pl.col("Amps").sum() > 0)
+watt_hour_df = col_df.select(pl.when(pl.col("Amps").sum() > 0)
                 .then((pl.col("Watts").sum() + ((pl.col('Amps').sum()) * sys_voltage)))
-                .otherwise(col_df.select(pl.col("Watts").sum()))).to_numpy()
-watt_hour = watt_hour_np[0]
+                .otherwise(col_df.select(pl.col("Watts").sum())).alias('watt_hour'))
+watt_hour = watt_hour_df.select(pl.col('watt_hour')).to_numpy()[0]
 
-amps_tot = (amps_tot_np + (watt_tot_np / sys_voltage))
-
-watt_day_np = col_df.select(pl.when(pl.col("Amps").sum() > 0)
+watt_day_df = col_df.select(pl.when(pl.col("Amps").sum() > 0)
                 .then((pl.col("Watts").sum() + ((pl.col('Amps').sum()) * sys_voltage)) * 24)
-                .otherwise(col_df.select(pl.col("Watts").sum() * 24))).to_numpy()
-watt_day = watt_day_np[0]
+                .otherwise(col_df.select(pl.col("Watts").sum() * 24)).alias('watt_day'))
+watt_day = watt_day_df.select(pl.col('watt_day')).to_numpy()[0]
 
-watt_week_np = col_df.select(pl.when(pl.col("Amps").sum() > 0)
+watt_week_df = col_df.select(pl.when(pl.col("Amps").sum() > 0)
                 .then((pl.col("Watts").sum() + ((pl.col('Amps').sum()) * sys_voltage)) * 168)
-                .otherwise(col_df.select(pl.col("Watts").sum() * 168))).to_numpy()
-watt_week = watt_week_np[0]
+                .otherwise(col_df.select(pl.col("Watts").sum() * 168)).alias('watt_week'))
+watt_week = watt_week_df.select(pl.col('watt_week')).to_numpy()[0]
 
 #'''Write a session state change for watts to amps, or amps to watts'''
-amp_week = (watt_week / sys_voltage) 
-amp_day = (amp_week / 7) * 1.2
-amps_day = (amp_week / 7) 
-amp_hour = (amp_day / 24)
-inverter_min = (watt_hour/ sys_voltage)
-solar_amps = (amp_day / sun_days)
-solar_panels = (solar_amps / panel_amps)
-batt_tot = (((amp_day / batt_dis) * cloudy_days) / batt_amps)
-amps_res = ((cloudy_days * amps_day) / batt_dis)
+amp_tot_df= col_df.with_columns(pl.when(pl.col("Watts").sum() > 0)
+                .then((pl.col("Amps").sum() + (pl.col('Watts').sum()) / sys_voltage))
+                .otherwise(col_df.select(pl.col("Amps").sum())).alias('amp_tot'))
+amps_tot = amp_tot_df.select(pl.col('amp_tot')).to_numpy()[0]
+
+amp_week_df = watt_week_df.with_columns(pl.when(pl.col("watt_week").sum() > 0)
+                .then(watt_week_df.select(pl.col("watt_week") / sys_voltage) * 1.2).alias('amps_week'))
+
+amps_week = amp_week_df.select(pl.col('amps_week')).to_numpy()[0]
+
+amps_day = amp_week_df.select(pl.col('amps_week') / 7).to_numpy()[0]
+
+amp_hours = amp_week_df.select((pl.col('amps_week') / 7) / 24).to_numpy()[0]
+
+inverter_min = watt_hour_df.select(pl.col('watt_hour') / sys_voltage).to_numpy()[0] 
+
+solar_amps = (amps_day / sun_days)
+if panel_amps > 0:
+    solar_panels = math.ceil(solar_amps / panel_amps)
+else: 
+    solar_panels = 0
+
+if batt_amps > 0:
+    if sys_voltage < batt_voltage:
+        batt_tot = 0
+        st.error('Cannot have a battery voltage higher than the system voltage')
+
+    elif sys_voltage == batt_voltage:
+        batt_tot = math.ceil(((amp_hours / batt_discharge) * cloudy_days) / batt_amps) 
+
+
+    elif sys_voltage  == batt_voltage * 2:
+        batt_tot = math.ceil(((amp_hours / batt_discharge) * cloudy_days) / batt_amps) * 2
+
+    elif sys_voltage == batt_voltage * 4:
+        batt_tot = math.ceil(((amp_hours / batt_discharge) * cloudy_days) / batt_amps) * 4
+
+    elif sys_voltage == batt_voltage * 6:
+        batt = math.ceil(((amp_hours / batt_discharge) * cloudy_days) / batt_amps) 
+        if (batt * batt_voltage) < sys_voltage:  
+            batt_tot = 6
+        elif (batt * batt_voltage) > sys_voltage:
+            multiplier = math.ceil((batt * batt_voltage) / sys_voltage)
+            batt_tot = (batt_voltage * multiplier)
+        else:
+            batt_tot = st.error('check batt')
+
+    elif sys_voltage == batt_voltage * 8:
+        batt_tot = math.ceil(((amp_hours / batt_discharge) * cloudy_days) / batt_amps) * 8
+    else:
+        batt_tot = 0
+        st.error('Cannot create a proper voltage with this combination ')
+
+else: 
+    batt_tot = 0
+
+amps_res = ((cloudy_days * amps_day) / batt_discharge)
 
 #had to place 'sidebar item' after calculations
 df_result = st.sidebar.dataframe({
     "Total Amps in Reserve":f'{amps_res}',
-    "Inverter Size":f'{np.round(inverter_min)}Watts',
+    "Inverter Size":f'{inverter_min}Watts',
     "Solar Amps Required": f'{solar_amps} Amps',
     "Total Solar Panels": f'{solar_panels}', 
-   f"{batt_voltage}-Volt Batteries Required": f'{np.round(batt_tot)}' 
+   f"{batt_voltage}-Volt Batteries Required": f'{batt_tot}' 
 })
 
 #total energy required
 df_res = st.dataframe({
     "Total Amps": f'{amps_tot}',
-    "Total Amps Per Day": f'{amps_day}',
-    "Total Amps Per Week": f'{amp_week}',
+    "Total Amps Per Day (x1.2)": f'{amps_day}',
+    "Total Amps Per Week (x1.2)": f'{amps_week}',
     "- - - - - - - - - - - - - - - - - - -": '< -------- >',
     "Total Watt Hours": f'{watt_hour}',
     "Total Watt Hours Per Day": f'{watt_day}', 
@@ -219,7 +265,7 @@ def create_pdf(col_df):
     "Inverter Size":f'{np.round(inverter_min)}Watts',
     "Solar Amps Required": f'{solar_amps} Amps',
     "Total Solar Panels": f'{solar_panels}', 
-   f"{batt_voltage}-Volt Batteries Required": f'{np.round(batt_tot)}' 
+   f"{batt_voltage}-Volt Batteries Required": f'{batt_tot}' 
 }) 
     DF_RES = pl.DataFrame({
     "Total Amps": f'{amps_tot}',
