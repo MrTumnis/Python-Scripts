@@ -160,21 +160,20 @@ if on:
 
 
 #'''calculations'''
-
 watt_tot_np = col_df.select(pl.col("Watts").sum() + (pl.col("Amps") * sys_voltage)).to_numpy()[0]
 
 watt_hour_df = col_df.select(pl.when(pl.col("Amps").sum() > 0)
-                .then((pl.col("Watts").sum() + ((pl.col('Amps').sum()) * sys_voltage)))
+                .then((pl.col("Watts").sum() + ((pl.col('Amps') * sys_voltage).sum())))
                 .otherwise(col_df.select(pl.col("Watts").sum())).alias('watt_hour'))
 watt_hour = watt_hour_df.select(pl.col('watt_hour')).to_numpy()[0]
 
 watt_day_df = col_df.select(pl.when(pl.col("Amps").sum() > 0)
-                .then((pl.col("Watts").sum() + ((pl.col('Amps').sum()) * sys_voltage)) * 24)
+                .then((pl.col("Watts").sum() + ((pl.col('Amps') * sys_voltage).sum())) * 24)
                 .otherwise(col_df.select(pl.col("Watts").sum() * 24)).alias('watt_day'))
 watt_day = watt_day_df.select(pl.col('watt_day')).to_numpy()[0]
 
 watt_week_df = col_df.select(pl.when(pl.col("Amps").sum() > 0)
-                .then((pl.col("Watts").sum() + ((pl.col('Amps').sum()) * sys_voltage)) * 168)
+                .then((pl.col("Watts").sum() + ((pl.col('Amps') * sys_voltage).sum())) * 168)
                 .otherwise(col_df.select(pl.col("Watts").sum() * 168)).alias('watt_week'))
 watt_week = watt_week_df.select(pl.col('watt_week')).to_numpy()[0]
 
@@ -182,20 +181,30 @@ watt_week = watt_week_df.select(pl.col('watt_week')).to_numpy()[0]
 amp_tot_df= col_df.with_columns(pl.when(pl.col("Watts").sum() > 0)
                 .then((pl.col("Amps").sum() + (pl.col('Watts').sum()) / sys_voltage))
                 .otherwise(col_df.select(pl.col("Amps").sum())).alias('amp_tot'))
-amps_tot = amp_tot_df.select(pl.col('amp_tot')).to_numpy()[0]
+amps_tot = amp_tot_df.select(pl.col('amp_tot').round(2)).to_numpy()[0]
 
 amp_week_df = watt_week_df.with_columns(pl.when(pl.col("watt_week").sum() > 0)
                 .then(watt_week_df.select(pl.col("watt_week") / sys_voltage) * 1.2).alias('amps_week'))
 
-amps_week = amp_week_df.select(pl.col('amps_week')).to_numpy()[0]
+amp_per_day = watt_week_df.with_columns(pl.when(pl.col("watt_week").sum() > 0)
+                .then(watt_week_df.select(pl.col("watt_week") / sys_voltage) / 7).alias('amps_per_day'))
+amps_per_day = amp_per_day.select(pl.col('amps_per_day').round(2)).to_numpy()[0]
 
-amps_day = amp_week_df.select(pl.col('amps_week') / 7).to_numpy()[0]
+amps_per_week = np.round((amps_per_day * 7), 2)
 
-amp_hours = amp_week_df.select((pl.col('amps_week') / 7) / 24).to_numpy()[0]
+amps_week = amp_week_df.select(pl.col('amps_week').round(2)).to_numpy()[0]
 
-inverter_min = watt_hour_df.select(pl.col('watt_hour') / sys_voltage).to_numpy()[0] 
+
+amps_day = amp_week_df.select((pl.col('amps_week') / 7).round(2)).to_numpy()[0]
+
+amp_hours = amp_week_df.select(((pl.col('amps_week') / 7) / 24).round(2)).to_numpy()[0]
+
+inverter_min = watt_hour_df.select((pl.col('watt_hour') * sys_voltage).round(2)).to_numpy()[0] 
 
 solar_amps = (amps_day / sun_days)
+
+amps_res = np.round(((cloudy_days * amps_per_day) / batt_discharge), 2)
+
 if panel_amps > 0:
     solar_panels = math.ceil(solar_amps / panel_amps)
 else: 
@@ -207,27 +216,26 @@ if batt_amps > 0:
         st.error('Cannot have a battery voltage higher than the system voltage')
 
     elif sys_voltage == batt_voltage:
-        batt_tot = math.ceil(((amp_hours / batt_discharge) * cloudy_days) / batt_amps) 
-
+        batt_tot = math.ceil(amps_res / batt_amps) 
 
     elif sys_voltage  == batt_voltage * 2:
-        batt_tot = math.ceil(((amp_hours / batt_discharge) * cloudy_days) / batt_amps) * 2
+        batt_tot = math.ceil(amps_res / batt_amps) * 2
 
     elif sys_voltage == batt_voltage * 4:
-        batt_tot = math.ceil(((amp_hours / batt_discharge) * cloudy_days) / batt_amps) * 4
+        batt_tot = math.ceil(amps_res / batt_amps) * 4
 
     elif sys_voltage == batt_voltage * 6:
-        batt = math.ceil(((amp_hours / batt_discharge) * cloudy_days) / batt_amps) 
+        batt = math.ceil(amps_res / batt_amps) 
         if (batt * batt_voltage) < sys_voltage:  
             batt_tot = 6
         elif (batt * batt_voltage) > sys_voltage:
             multiplier = math.ceil((batt * batt_voltage) / sys_voltage)
             batt_tot = (batt_voltage * multiplier)
         else:
-            batt_tot = st.error('check batt')
+            batt_tot = st.error('check battery multiplier')
 
     elif sys_voltage == batt_voltage * 8:
-        batt_tot = math.ceil(((amp_hours / batt_discharge) * cloudy_days) / batt_amps) * 8
+        batt_tot = math.ceil(amps_res / batt_amps) * 8
     else:
         batt_tot = 0
         st.error('Cannot create a proper voltage with this combination ')
@@ -235,7 +243,6 @@ if batt_amps > 0:
 else: 
     batt_tot = 0
 
-amps_res = ((cloudy_days * amps_day) / batt_discharge)
 
 #had to place 'sidebar item' after calculations
 df_result = st.sidebar.dataframe({
@@ -248,9 +255,9 @@ df_result = st.sidebar.dataframe({
 
 #total energy required
 df_res = st.dataframe({
-    "Total Amps": f'{amps_tot}',
-    "Total Amps Per Day (x1.2)": f'{amps_day}',
-    "Total Amps Per Week (x1.2)": f'{amps_week}',
+    "Total Amps Per Day": f'{amps_per_day}',
+    "Total Amps/Day (x1.2)": f'{amps_day}',
+    "Total Amps Per Week": f'{amps_per_week}',
     "- - - - - - - - - - - - - - - - - - -": '< -------- >',
     "Total Watt Hours": f'{watt_hour}',
     "Total Watt Hours Per Day": f'{watt_day}', 
@@ -262,7 +269,7 @@ def create_pdf(col_df):
     DF = pl.DataFrame(col_df) 
     DF_RESULT = pl.DataFrame({
     "Total Amps in Reserve":f'{amps_res}',
-    "Inverter Size":f'{np.round(inverter_min)}Watts',
+    "Inverter Size":f'{inverter_min}Watts',
     "Solar Amps Required": f'{solar_amps} Amps',
     "Total Solar Panels": f'{solar_panels}', 
    f"{batt_voltage}-Volt Batteries Required": f'{batt_tot}' 
@@ -270,7 +277,7 @@ def create_pdf(col_df):
     DF_RES = pl.DataFrame({
     "Total Amps": f'{amps_tot}',
     "Total Amps Per Day": f'{amps_day}',
-    "Total Amps Per Week": f'{amp_week}',
+    "Total Amps Per Week": f'{amps_week}',
     "Total Watt Hours": f'{watt_hour}',
     "Total Watt Hours Per Day": f'{watt_day}', 
     "Total Watt Hours Per Week": f'{watt_week}'
