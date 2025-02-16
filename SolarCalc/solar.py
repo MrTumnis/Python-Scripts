@@ -150,7 +150,11 @@ if on:
             if del_opt is not 'Items to Delete':
                 df_col = df.filter(~pl.col('Solar Items').str.contains(f'^{col}$', literal=False))
                 st.write(df_col)
-                df_col.write_json('./datatable.json')
+                if df_col.is_empty(): 
+                    os.remove('./datatable.json')
+                    st.write('No Saved Items Exist')
+                else:
+                    df_col.write_json('./datatable.json')
     else:
         st.write('No Saved Items Exist')
 
