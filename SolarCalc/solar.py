@@ -5,6 +5,7 @@ import io
 import os
 import json
 import math
+import time
 import streamlit.components.v1 as components
 from fpdf import FPDF
 
@@ -60,7 +61,7 @@ cloudy_days = st.sidebar.selectbox(
 
 panel_amps = st.sidebar.number_input("Panel Amperage", value = 0)
 
-
+'''Need to write a session_state that checks if amps is input, then calculate the watts and populate the table'''
 #Main Datatable
 col_list = ['Solar Items', 'Amps', 'Watts']
 df = pl.DataFrame(
@@ -74,8 +75,8 @@ df = pl.DataFrame(
 def save_user_input():
     condition = (pl.col("Solar Items").str.starts_with("Insert")).not_() & ((pl.col("Amps") != 0.00) | (pl.col("Watts") != 0.00))
     new_data = col_df.with_columns(col_list).filter(condition)
-    new_df = st.data_editor(new_data, key='new_df', column_order= col_list)
-    if 'new_df' not in st.session_state:
+    new_df = st.data_editor(new_data, key='newdf', column_order= col_list)
+    if 'newdf' not in st.session_state:
         st.session_state.new_df = new_df
     return new_df
     
@@ -113,20 +114,34 @@ if st.button("Save Items", key='save_button', help='Save the Solar Items for use
         if os.path.getsize('./datatable.json') > 0:
             df_json = pl.read_json('./datatable.json')
             new_df = df.join(df_json, on=col_list, how='full', coalesce=True)
-            new_df.write_json('./datatable.json')
+            if df.is_empty():
+                st.error('Input a name for the item before saving')
+            else:
+                new_df.write_json('./datatable.json')
+                st.success("Data saved!")
+                time.sleep(2)
+                st.rerun()
         else: 
             df.write_json('./datatable.json')
+            st.success("Data saved!")
+            time.sleep(2)
+            st.rerun()
     else:
-        df.write_json('./datatable.json')
-    st.success("Data saved!")
+        if df.is_empty():
+            st.error('Input a name for the item before saving')
+        else:
+            df.write_json('./datatable.json')
+            st.success("Data saved!")
+            time.sleep(2)
+            st.rerun()
 
-on = st.toggle("Show Saved Items")
 
+
+on = st.toggle("Edit Saved Items", value=False)
 
 if on:
     if os.path.exists('./datatable.json'):
         df = pl.read_json('./datatable.json')
-        # del_items = [row[0] for row in df.iter_rows()]
         del_items = df.rows()
 
         saved_items = st.data_editor(
@@ -142,19 +157,30 @@ if on:
             disabled=False,
         ),
 
-        del_opt = st.multiselect('Select Items to Delete from Saved File', del_items, placeholder='Items to Delete'),
-        if del_opt is not 'Items to Delete':
+        del_opt = st.selectbox('Select Item to Delete from Saved File', del_items, placeholder='Item to Delete'),
+        if del_opt is not None:
             for item in del_opt:
-                for row in item:
-                   col = row[0] 
+                for i, row in enumerate(item):
+                    if i == 0:
+                        col = row 
+                    elif i == 1:
+                        col2 = row 
+                    else:
+                        col3 = row 
+
         if st.button('Delete Items'):#, on_click=)
-            if del_opt is not 'Items to Delete':
+            if del_opt is not None: 
                 df_col = df.filter(~pl.col('Solar Items').str.contains(f'^{col}$', literal=False))
                 if df_col.is_empty(): 
                     os.remove('./datatable.json')
-                    st.write('No Saved Items Exist')
+                    st.write('Item Deleted')
+                    time.sleep(1)
+                    st.rerun()
                 else:
                     df_col.write_json('./datatable.json')
+                    st.write('Item Deleted')
+                    time.sleep(1)
+                    st.rerun()
     else:
         st.write('No Saved Items Exist')
 
