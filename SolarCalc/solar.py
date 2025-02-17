@@ -61,7 +61,7 @@ cloudy_days = st.sidebar.selectbox(
 
 panel_amps = st.sidebar.number_input("Panel Amperage", value = 0)
 
-'''Need to write a session_state that checks if amps is input, then calculate the watts and populate the table'''
+#'''Need to write a session_state that checks if amps is input, then calculate the watts and populate the table'''
 #Main Datatable
 col_list = ['Solar Items', 'Amps', 'Watts']
 df = pl.DataFrame(
@@ -137,7 +137,7 @@ if st.button("Save Items", key='save_button', help='Save the Solar Items for use
 
 
 
-on = st.toggle("Edit Saved Items", value=False)
+on = st.toggle("View Saved Items", value=False, help='Copy/Paste and Delete Items')
 
 if on:
     if os.path.exists('./datatable.json'):
@@ -168,16 +168,19 @@ if on:
                     else:
                         col3 = row 
 
-        if st.button('Delete Items'):#, on_click=)
+        if st.button('Delete Items'):
             if del_opt is not None: 
-                df_col = df.filter(~pl.col('Solar Items').str.contains(f'^{col}$', literal=False))
-                if df_col.is_empty(): 
+                condition = ((pl.col('Solar Items').str.contains(f'^{col}$')) & ((pl.col('Amps') == col2) & (pl.col('Watts') == col3)))
+                df_col = df.select(pl.col(['Solar Items', 'Amps', 'Watts']).filter(condition))
+                df_new = df.join(df_col,on=df.columns, how='anti')
+
+                if df_new.is_empty(): 
                     os.remove('./datatable.json')
                     st.write('Item Deleted')
                     time.sleep(1)
                     st.rerun()
                 else:
-                    df_col.write_json('./datatable.json')
+                    df_new.write_json('./datatable.json')
                     st.write('Item Deleted')
                     time.sleep(1)
                     st.rerun()
@@ -186,50 +189,50 @@ if on:
 
 
 #'''calculations'''
-watt_tot_np = col_df.select(pl.col("Watts").sum() + (pl.col("Amps") * sys_voltage)).to_numpy()[0]
+watt_tot_np = col_df.select(pl.col("Watts").sum() + (pl.col("Amps") * sys_voltage)).item(0,0)
 
 watt_hour_df = col_df.select(pl.when(pl.col("Amps").sum() > 0)
                 .then((pl.col("Watts").sum() + ((pl.col('Amps') * sys_voltage).sum())))
                 .otherwise(col_df.select(pl.col("Watts").sum())).alias('watt_hour'))
-watt_hour = watt_hour_df.select(pl.col('watt_hour')).to_numpy()[0]
+watt_hour = watt_hour_df.select(pl.col('watt_hour')).item(0,0)
 
 watt_day_df = col_df.select(pl.when(pl.col("Amps").sum() > 0)
                 .then((pl.col("Watts").sum() + ((pl.col('Amps') * sys_voltage).sum())) * 24)
                 .otherwise(col_df.select(pl.col("Watts").sum() * 24)).alias('watt_day'))
-watt_day = watt_day_df.select(pl.col('watt_day')).to_numpy()[0]
+watt_day = watt_day_df.select(pl.col('watt_day')).item(0,0)
 
 watt_week_df = col_df.select(pl.when(pl.col("Amps").sum() > 0)
                 .then((pl.col("Watts").sum() + ((pl.col('Amps') * sys_voltage).sum())) * 168)
                 .otherwise(col_df.select(pl.col("Watts").sum() * 168)).alias('watt_week'))
-watt_week = watt_week_df.select(pl.col('watt_week')).to_numpy()[0]
+watt_week = watt_week_df.select(pl.col('watt_week')).item(0,0)
 
 #'''Write a session state change for watts to amps, or amps to watts'''
 amp_tot_df= col_df.with_columns(pl.when(pl.col("Watts").sum() > 0)
                 .then((pl.col("Amps").sum() + (pl.col('Watts').sum()) / sys_voltage))
                 .otherwise(col_df.select(pl.col("Amps").sum())).alias('amp_tot'))
-amps_tot = amp_tot_df.select(pl.col('amp_tot').round(2)).to_numpy()[0]
+amps_tot = amp_tot_df.select(pl.col('amp_tot').round(2)).item(0,0)
 
 amp_week_df = watt_week_df.with_columns(pl.when(pl.col("watt_week").sum() > 0)
                 .then(watt_week_df.select(pl.col("watt_week") / sys_voltage) * 1.2).alias('amps_week'))
 
 amp_per_day = watt_week_df.with_columns(pl.when(pl.col("watt_week").sum() > 0)
                 .then(watt_week_df.select(pl.col("watt_week") / sys_voltage) / 7).alias('amps_per_day'))
-amps_per_day = amp_per_day.select(pl.col('amps_per_day').round(2)).to_numpy()[0]
+
+amps_per_day = amp_per_day.select(pl.when(pl.col('amps_per_day') > 0).then(pl.col('amps_per_day').round(2)).otherwise(0)).item(0,0)
 
 amps_per_week = np.round((amps_per_day * 7), 2)
 
-amps_week = amp_week_df.select(pl.col('amps_week').round(2)).to_numpy()[0]
+amps_week = amp_week_df.select(pl.col('amps_week').round(2)).item(0,0)
 
+amps_day = amp_week_df.select(pl.when(pl.col('amps_week') > 0).then((pl.col('amps_week') / 7).round(2)).otherwise(0)).item(0,0)
 
-amps_day = amp_week_df.select((pl.col('amps_week') / 7).round(2)).to_numpy()[0]
+amp_hours = amp_week_df.select(((pl.col('amps_week') / 7) / 24).round(2)).item(0,0)
 
-amp_hours = amp_week_df.select(((pl.col('amps_week') / 7) / 24).round(2)).to_numpy()[0]
+inverter_min = watt_hour_df.select((pl.col('watt_hour') * sys_voltage).round(2)).item(0,0) 
 
-inverter_min = watt_hour_df.select((pl.col('watt_hour') * sys_voltage).round(2)).to_numpy()[0] 
+solar_amps = round((amps_day / sun_days), 1)
 
-solar_amps = (amps_day / sun_days)
-
-amps_res = np.round(((cloudy_days * amps_per_day) / batt_discharge), 2)
+amps_res = ((cloudy_days * amps_per_day) / batt_discharge)
 
 if panel_amps > 0:
     solar_panels = math.ceil(solar_amps / panel_amps)
@@ -273,7 +276,7 @@ else:
 #had to place 'sidebar item' after calculations
 df_result = st.sidebar.dataframe({
     "Total Amps in Reserve":f'{amps_res}',
-    "Inverter Size":f'{inverter_min}Watts',
+    "Inverter Size":f'{inverter_min} Watts',
     "Solar Amps Required": f'{solar_amps} Amps',
     "Total Solar Panels": f'{solar_panels}', 
    f"{batt_voltage}-Volt Batteries Required": f'{batt_tot}' 
