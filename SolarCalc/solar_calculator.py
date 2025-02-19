@@ -73,8 +73,7 @@ panel_amps = st.sidebar.number_input("Panel Amperage", value = 0)
 #Main Datatable
 col_list = ['Solar Items', 'Amps', 'Watts']
 
-if 'datatable' not in st.session_state:
-    st.session_state.datatable = pl.DataFrame(
+main_df  = pl.DataFrame(
     [
         {"Solar Items": "Insert Solar Items Here", "Amps": 0.00, "Watts": 0.00},
         {"Solar Items": "Insert Solar Items Here", "Amps": 0.00, "Watts": 0.00},
@@ -82,6 +81,8 @@ if 'datatable' not in st.session_state:
     ]
 )
 
+if 'datatable' not in st.session_state:
+    st.session_state.datatable = main_df
 
 def save_user_input():
     condition = (pl.col("Solar Items").str.starts_with("Insert")).not_() & ((pl.col("Amps") != 0.00) | (pl.col("Watts") != 0.00))
@@ -116,29 +117,35 @@ col_df = st.data_editor(
     disabled=False,
 )
 
+# if 'old_datatable' not in st.session_state:
+#     st.session_state.old_datatable = st.session_state.datatable
 
 if 'data_table' not in st.session_state:
     st.session_state.data_table = data_table
 
 if 'datatable' in st.session_state:
-    df_temp = st.session_state.datatable 
     df_temp2 = st.session_state.data_table
-    columns = df_temp2.get('edited_rows', {})
     json_list = []
+    columns = df_temp2.get('edited_rows', {})
+    for key, value in df_temp2.items():
+        for item in value:
+            if key == 'added_rows':
+                json_list.append(item)
+            #'''may need to write a way to remove the rows based on index since 'deleted_rows' only show row index'''
+            if key == 'deleted_rows':
+                del_rows = item
+
     for key, val in columns.items():
         new_col = columns.get(key) 
         json_list.append(new_col)
+
         
     with open("./.temp.json", "w") as outfile:
         json.dump(json_list, outfile)
 
     json_df = pl.read_json('./.temp.json', schema= {'Solar Items':pl.String, 'Amps':pl.Float64, 'Watts':pl.Float64})
 
-    new_df = pl.concat([json_df,df_temp])
-    st.write(new_df)
-
-    # st.session_state.datatable
-
+    new_df = pl.concat([json_df])
 
 
 
@@ -194,7 +201,7 @@ if on:
             disabled=False,
         ),
 
-        del_opt = st.selectbox('Delete from Saved File', del_items, placeholder='Item to Delete'),
+        del_opt = st.selectbox('Saved Items', del_items, placeholder='Item to Delete'),
         if del_opt is not None:
             for item in del_opt:
                 for i, row in enumerate(item):
@@ -209,14 +216,26 @@ if on:
             but1, but2 = st.columns(2)
             with but1:
                 if st.button('Add Items to DataTable'):
-                    if del_opt is not None: 
-                        condition = ((pl.col('Solar Items').str.contains(f'^{col}$')) & ((pl.col('Amps') == col2) & (pl.col('Watts') == col3)))
-                        df_col = df.select(pl.col(['Solar Items', 'Amps', 'Watts']).filter(condition))
-                        df1 = st.session_state.datatable
-                        df_new = pl.concat([df1,df_col])
-                        if not st.session_state.datatable.equals(df_new):
-                            st.session_state.datatable = df_new.clone()
-                        st.rerun()
+                    condition = ((pl.col('Solar Items').str.contains(f'^{col}$')) & ((pl.col('Amps') == col2) & (pl.col('Watts') == col3)))
+                    df_col = df.select(pl.col(['Solar Items', 'Amps', 'Watts']).filter(condition))
+
+                    if st.session_state.datatable.equals(main_df):
+                        if new_df.is_empty():
+                            df_new = pl.concat([df_col])
+                        else:
+                            df_new = pl.concat([new_df, df_col])
+
+                    elif not new_df.is_empty():
+                        df_new = pl.concat([st.session_state.datatable,new_df, df_col])
+                        
+                    else: 
+                        df_new = pl.concat([st.session_state.datatable, df_col])
+
+                    if not st.session_state.datatable.equals(df_new):
+                        st.session_state.datatable = df_new
+
+                    time.sleep(1)
+                    st.rerun()
 
             with but2:
                 if st.button('Delete Items From Save File'):
