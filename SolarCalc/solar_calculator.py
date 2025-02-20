@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#     "fpdf",
+#     "fpdf2",
 #     "numpy",
 #     "polars",
 #     "streamlit",
