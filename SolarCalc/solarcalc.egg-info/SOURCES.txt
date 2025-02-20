@@ -1,0 +1,8 @@
+README.md
+pyproject.toml
+solar.py
+solarcalc.egg-info/PKG-INFO
+solarcalc.egg-info/SOURCES.txt
+solarcalc.egg-info/dependency_links.txt
+solarcalc.egg-info/requires.txt
+solarcalc.egg-info/top_level.txt

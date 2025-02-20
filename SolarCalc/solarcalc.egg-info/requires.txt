@@ -1,0 +1,4 @@
+fpdf>=1.7.2
+numpy>=2.2.3
+polars>=1.22.0
+streamlit>=1.42.0
