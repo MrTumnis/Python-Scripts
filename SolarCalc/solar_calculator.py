@@ -11,9 +11,9 @@ import streamlit as st
 import numpy as np
 import polars as pl
 import os
+import io
 import math
 import time
-import base64
 import json
 from fpdf import FPDF
 
@@ -368,7 +368,7 @@ df_res = st.dataframe({
 })
 
 @st.fragment()
-def create_pdf(col_df):
+def create_pdf():
     DF = pl.DataFrame(col_df) 
     DF_RESULT = pl.DataFrame({
     "Total Amps in Reserve":f'{amps_res}',
@@ -436,11 +436,20 @@ def create_pdf(col_df):
             pdf.cell(39, 10, str(datum), border=3)
         pdf.ln()   
 
-    pdf.output(f"{site}SolarCalcs.pdf")
+    pdf_output = io.BytesIO()
+    pdf.output(pdf_output)
+    pdf_output.seek(0)  # Reset cursor position to the beginning of the file
+    return pdf_output
+    # pdf_download = pdf.output('D', f"{site}SolarCalcs.pdf")
+    # pdf_download = pdf.output()
+    # return pdf_download 
     
 st.title("Create PDF")
-if st.button(label="Print", key="generate", help='Generate a PDF of the Solar Calculations'):
-    pdf_data = create_pdf(col_df)
+if st.button(label="Print", key="generate", help='Generate a PDF of the Solar Calculations'):#, on_click=create_pdf(col_df)):
+    pdf_data = create_pdf()
     st.text('Success')
     time.sleep(1)
 
+    st.download_button(label="Download PDF", key="download", file_name=f"{site}SolarCalcs.pdf",data=pdf_data, mime='application/pdf', help='Download PDF')
+    
+    
