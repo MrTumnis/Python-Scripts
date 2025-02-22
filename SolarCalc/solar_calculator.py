@@ -17,6 +17,8 @@ import time
 import json
 from fpdf import FPDF
 
+save_path = '/home/thomas/Python-Scripts/SolarCalc/datatable.json'
+temp_path= '/home/thomas/Python-Scripts/SolarCalc/.temp.json'
 
 st.set_page_config(
     page_title="Solar Calculator",
@@ -143,7 +145,7 @@ if 'datatable' in st.session_state:
     with open("./.temp.json", "w") as outfile:
         json.dump(json_list, outfile)
 
-    json_df = pl.read_json('./.temp.json', schema= {'Solar Items':pl.String, 'Amps':pl.Float64, 'Watts':pl.Float64})
+    json_df = pl.read_json(temp_path, schema= {'Solar Items':pl.String, 'Amps':pl.Float64, 'Watts':pl.Float64})
 
     new_df = pl.concat([json_df])
 
@@ -151,19 +153,19 @@ if 'datatable' in st.session_state:
 
 if st.button("Save Items", key='save_button', help='Save the Solar Items to File'):
     df = save_user_input()
-    if os.path.exists('./datatable.json'):
-        if os.path.getsize('./datatable.json') > 0:
-            df_json = pl.read_json('./datatable.json')
+    if os.path.exists(save_path):
+        if os.path.getsize(save_path) > 0:
+            df_json = pl.read_json(save_path)
             new_df = df.join(df_json, on=col_list, how='full', coalesce=True)
             if df.is_empty():
                 st.error('Input a Name and Value for the Solar Item before saving')
             else:
-                new_df.write_json('./datatable.json')
+                new_df.write_json(save_path)
                 st.success("Data saved!")
                 time.sleep(2)
                 st.rerun()
         else: 
-            df.write_json('./datatable.json')
+            df.write_json(save_path)
             st.success("Data saved!")
             time.sleep(2)
             st.rerun()
@@ -171,7 +173,7 @@ if st.button("Save Items", key='save_button', help='Save the Solar Items to File
         if df.is_empty():
             st.error('Input a Name and Value for the Solar Item before saving')
         else:
-            df.write_json('./datatable.json')
+            df.write_json(save_path)
             st.success("Data saved!")
             time.sleep(2)
             st.rerun()
@@ -184,8 +186,8 @@ if 'toggle' not in st.session_state:
     st.session_state.toggle = False 
 
 if on:
-    if os.path.exists('./datatable.json'):
-        df = pl.read_json('./datatable.json')
+    if os.path.exists(save_path):
+        df = pl.read_json(save_path)
         del_items = df.rows()
 
         saved_items = st.data_editor(
@@ -245,14 +247,14 @@ if on:
                         df_new = df.join(df_col,on=df.columns, how='anti')
 
                         if df_new.is_empty(): 
-                            os.remove('./datatable.json')
+                            os.remove(save_path)
                             st.write('Item Deleted')
                             if 'toggle' in st.session_state:
                                 del st.session_state.toggle 
                             time.sleep(1)
                             st.rerun()
                         else:
-                            df_new.write_json('./datatable.json')
+                            df_new.write_json(save_path)
                             st.write('Item Deleted')
                             time.sleep(1)
                             st.rerun()
