@@ -276,17 +276,17 @@ try:
     watt_hour_df = col_df.select(pl.when(pl.col("Amps").sum() > 0)
                     .then((pl.col("Watts").sum() + ((pl.col('Amps') * sys_voltage).sum())))
                     .otherwise(col_df.select(pl.col("Watts").sum())).alias('watt_hour'))
-    watt_hour = watt_hour_df.select(pl.col('watt_hour')).item(0,0)
+    watt_hour = watt_hour_df.select(pl.col('watt_hour').round(2)).item(0,0)
 
     watt_day_df = col_df.select(pl.when(pl.col("Amps").sum() > 0)
                     .then((pl.col("Watts").sum() + ((pl.col('Amps') * sys_voltage).sum())) * 24)
                     .otherwise(col_df.select(pl.col("Watts").sum() * 24)).alias('watt_day'))
-    watt_day = watt_day_df.select(pl.col('watt_day')).item(0,0)
+    watt_day = watt_day_df.select(pl.col('watt_day').round(2)).item(0,0)
 
     watt_week_df = col_df.select(pl.when(pl.col("Amps").sum() > 0)
                     .then((pl.col("Watts").sum() + ((pl.col('Amps') * sys_voltage).sum())) * 168)
                     .otherwise(col_df.select(pl.col("Watts").sum() * 168)).alias('watt_week'))
-    watt_week = watt_week_df.select(pl.col('watt_week')).item(0,0)
+    watt_week = watt_week_df.select(pl.col('watt_week').round(2)).item(0,0)
 
     #'''Write a session state change for watts to amps, or amps to watts'''
     amp_tot_df= col_df.with_columns(pl.when(pl.col("Watts").sum() > 0)
@@ -298,8 +298,8 @@ try:
                     .then(watt_week_df.select(pl.col("watt_week") / sys_voltage) * 1.2).alias('amps_week'))
 
     amp_per_day = watt_week_df.with_columns(pl.when(pl.col("watt_week").sum() > 0)
-                    .then(watt_week_df.select(pl.col("watt_week") / sys_voltage) / 7).alias('amps_per_day'))
-
+                    .then(watt_week_df.select(pl.col("watt_week") / sys_voltage) / 7).alias('amps_per_day').round(2))
+    
     amps_per_day = amp_per_day.select(pl.when(pl.col('amps_per_day') > 0).then(pl.col('amps_per_day').round(2)).otherwise(0)).item(0,0)
 
     amps_per_week = np.round((amps_per_day * 7), 2)
