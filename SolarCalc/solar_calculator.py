@@ -35,7 +35,7 @@ st.set_page_config(
     }
 )
     
-advm2_logo = './advm2logo.png'
+advm2_logo = '/home/thomas/Python-Scripts/SolarCalc/advm2logo.png'
 st.logo(advm2_logo)
 st.title("Solar Calculator")
 site = st.text_input(label='Site Name')
