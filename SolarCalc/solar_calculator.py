@@ -124,9 +124,6 @@ col_df = st.data_editor(
     disabled=False,
 )
 
-# if 'old_datatable' not in st.session_state:
-#     st.session_state.old_datatable = st.session_state.datatable
-
 if 'data_table' not in st.session_state:
     st.session_state.data_table = data_table
 
@@ -185,7 +182,7 @@ if st.button("Save Items", key='save_button', help='Save the Solar Items to File
 
 
 
-on = st.toggle("View Saved Items", help='Copy/Paste and Delete Items', key='toggle', value=st.session_state.get('toggle', False))
+on = st.toggle("View Saved Items", help='Add or Delete Saved Items', key='toggle', value=st.session_state.get('toggle', False))
 
 if 'toggle' not in st.session_state:
     st.session_state.toggle = False 
