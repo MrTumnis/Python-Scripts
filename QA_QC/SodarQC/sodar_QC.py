@@ -2,7 +2,7 @@
 # /// script
 # requires-python = ">=3.9"
 # dependencies = [
-#     "polars",
+#     "polars==1.21.0",
 #     "simple-term-menu",
 # ]
 # ///
@@ -90,6 +90,24 @@ def read_file(height=None) -> dict:
         if height is not None:
             lf = lazy_dict[height]
             return lf 
+
+        if args.compare:
+            # files = []
+            file_list = glob.glob(os.walk(file_path))
+            for item in file_list:
+                print(item)
+                    
+            files_menu = TerminalMenu(file_list, title=('Choose the Met file for comparison'))
+            selection = files_menu.show()
+            file_choice = file_list[selection]
+                
+            file = (pl
+                .scan_csv(file_choice, has_header=True, null_values=null_items, raise_if_empty=True)
+                .with_columns(pl
+                .col('TIMESTAMP').str
+                .to_datetime('%Y-%m-%d %H:%M:%S',time_unit=None, time_zone=None, strict=False))
+            )
+            return file
 
         #Return all files in a dictionary
         else:
@@ -393,6 +411,19 @@ def df_merge(lf, args):
             longform = long_df.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d %H:%M:%S'))
             return longform
 
+        elif args.compare:
+            file_list = glob.glob(os.path.join('*GPWauna*'))
+            files_menu = TerminalMenu(file_list, title=('Choose the path of the Met files'))
+            selection = files_menu.show()
+            file_path = file_list[selection]
+            
+            
+
+            sodar_df = read_file(height = '30')
+            # met_df = 
+            compare = df.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d %H:%M:%S'))
+            return compare 
+
         else:
             fnl_dict = {}
             f = 30
@@ -415,6 +446,7 @@ def df_merge(lf, args):
 
 if __name__ == '__main__': 
     parser = argparse.ArgumentParser()
+    parser.add_argument('-c', '--compare', action='store_true' ,help="Compare the Met to Sodar 30m data in a csv file")
     parser.add_argument('-d', '--dat', action='store_true' ,help="Export range seperated files as .dat for data upload (default is csv)")
     parser.add_argument('-l', '--longform', action='store_true' ,help="Export a file in csv of QC'd files combined")
     parser.add_argument('-q', '--qafile', action='store_true', help="output csv with all checks for comparison")
@@ -466,6 +498,11 @@ if __name__ == '__main__':
                 for h, df in merged_df.items():
                     file = str(f'SODAR{h}' + '.dat') 
                     df.write_csv(file=f'{path}/{file}', include_header=False, quote_char='"', quote_style='non_numeric',float_precision=2)
+
+            elif args.compare:
+                df = read_file.collect()
+                file = str(date_start + '_' + date_end + '_' + 'MET-SODAR_compare' + '.csv' )
+                df.write_csv(file=f'{path}/{file}' ,include_header=True, float_scientific=False, float_precision=2)
 
             else:
                 for h, df in merged_df.items():
