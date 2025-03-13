@@ -4,3 +4,4 @@ QA_QC/temp.csv
 Central_API
 .venv
 log*
+*.db
