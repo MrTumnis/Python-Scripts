@@ -3,3 +3,4 @@ QA_QC/SODAR.csv
 QA_QC/temp.csv
 Central_API
 .venv
+log*
