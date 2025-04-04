@@ -46,7 +46,7 @@ columns = {
 
 
 #Return all lazy files in a dictionary for easy reference and append height of each range gate to column name 
-def read_file(height=None) -> dict:
+def read_file(height=None, met=False) -> dict:
 
     null_items = ['TIMESTAMP', 'm/s', '\u00B0', ""]
     
@@ -58,16 +58,21 @@ def read_file(height=None) -> dict:
  
     try:
         file_list = glob.glob(os.path.join('*GPWauna*'))
+        if file_list == []:
+            print('GPWauna files not found. Are they in the same directory? ')
+            sys.exit()
+
         files_menu = TerminalMenu(file_list, title=('Choose the path of the Sodar files. (can be a .zip file)'))
         selection = files_menu.show()
         file_path = file_list[selection]
+
 
         if file_path.endswith('.zip'):
             with zipfile.ZipFile(f'{file_path}', 'r') as zip_file:
                 file_path = file_path.strip('.zip')
                 zip_file.extractall(f'{file_path}')
 
-
+        
         for h in lazy_dict.keys():
             file = (pl
                 .scan_csv(f'{file_path}/Wauna_SODAR{h}_Table15.csv', has_header=True, null_values=null_items, raise_if_empty=True)
@@ -76,7 +81,8 @@ def read_file(height=None) -> dict:
                 .to_datetime('%Y-%m-%d %H:%M:%S',time_unit=None, time_zone=None, strict=False)).cast(schema)
             )
             lazy_dict.update({h:file})
-
+            
+        
         #Append the file height to the column names
         for key, value in lazy_dict.items():
             lf = lazy_dict[key]
@@ -86,28 +92,19 @@ def read_file(height=None) -> dict:
             lf = df.lazy()
             lazy_dict.update({key:lf})
 
+        if met == True:
+            met_file = (pl
+               .scan_csv(f'{file_path}/WaunaMet_Table15_Table15.csv', has_header=True, null_values=null_items, raise_if_empty=True)
+               .with_columns(pl
+               .col('TIMESTAMP').str
+               .to_datetime('%Y-%m-%d %H:%M:%S',time_unit=None, time_zone=None, strict=False))
+                    ) 
+            return met_file, lazy_dict
+
         #Return a lazy frame based on height of data recordings 
-        if height is not None:
+        elif height is not None:
             lf = lazy_dict[height]
             return lf 
-
-        if args.compare:
-            # files = []
-            file_list = glob.glob(os.walk(file_path))
-            for item in file_list:
-                print(item)
-                    
-            files_menu = TerminalMenu(file_list, title=('Choose the Met file for comparison'))
-            selection = files_menu.show()
-            file_choice = file_list[selection]
-                
-            file = (pl
-                .scan_csv(file_choice, has_header=True, null_values=null_items, raise_if_empty=True)
-                .with_columns(pl
-                .col('TIMESTAMP').str
-                .to_datetime('%Y-%m-%d %H:%M:%S',time_unit=None, time_zone=None, strict=False))
-            )
-            return file
 
         #Return all files in a dictionary
         else:
@@ -300,10 +297,6 @@ def precip_check(lf):
         logging.error(f"Error performing precip check: {e}")
 
 
-#def echo_check(): can add later, but not recommended for QA/QC
-    
-
-
 def df_merge(lf, args):
     try:
         lf1 = pl.concat(speed_profile_check(lf), how='horizontal', parallel=True)
@@ -315,12 +308,6 @@ def df_merge(lf, args):
         qa_file = pl.concat([lf1,lf2,lf3,lf4,lf5],how='horizontal',parallel=True).collect()
         check_dict = {} 
         df_time = df1.select('TIMESTAMP')
-
-        # if args.qafile:
-        #     df = qa_file 
-        # else:
-        #     print("remove me later, and asign df1")
-        #     df = qa_file 
 
         '''Return the minimum validity code (0, 2, or 9) for each check as the reliabilty for each wind component. Precip_Check flag sets the validity to 3. *will likely need to seperate the "0" checks for each range gate'''
         h = 30
@@ -411,19 +398,6 @@ def df_merge(lf, args):
             longform = long_df.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d %H:%M:%S'))
             return longform
 
-        elif args.compare:
-            file_list = glob.glob(os.path.join('*GPWauna*'))
-            files_menu = TerminalMenu(file_list, title=('Choose the path of the Met files'))
-            selection = files_menu.show()
-            file_path = file_list[selection]
-            
-            
-
-            sodar_df = read_file(height = '30')
-            # met_df = 
-            compare = df.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d %H:%M:%S'))
-            return compare 
-
         else:
             fnl_dict = {}
             f = 30
@@ -437,6 +411,12 @@ def df_merge(lf, args):
 
                 f += 5
 
+            if args.compare:
+                # met_file = read_file(met=True)
+                # print("Met file:", met_file.collect())
+                df_30 = fnl_dict[30] 
+                print("Sodar30 file:", df_30)
+                
             return fnl_dict
 
     except Exception as e:
@@ -454,63 +434,66 @@ if __name__ == '__main__':
     parser.add_argument('-v', '--version', action='store_true', help="Show the versions of libraries")
     args = parser.parse_args()
 
-    #global dataframes 
-    df = read_file()
-    lf = lf_merge(df)
-
-    if args.version:
+    if args.compare:
+        met_file = read_file(met=True)
+        print("Met file:", met_file)
+    
+    elif args.version:
         pl.show_versions()
         sys.exit()
 
     else:
+        #global dataframes 
+        df = read_file()
+        lf = lf_merge(df)
 
-        try:
-            #likely an easier and better way to get start and end time of file range 
-            date_df = lf 
-            date = date_df.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d')).collect()
-            date_start = date[1,0]
-            date_end = date[-1,0]
-                    
-        except Exception as e:
-            logging.error(f"Error collecting start and end dates {e}")
+    try:
+        #likely an easier and better way to get start and end time of file range 
+        date_df = lf 
+        date = date_df.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d')).collect()
+        date_start = date[1,0]
+        date_end = date[-1,0]
+                
+    except Exception as e:
+        logging.error(f"Error collecting start and end dates {e}")
+    
+    try:
+        os.makedirs(f'{date_start}_{date_end}_QA-QC_SODAR', exist_ok=True)
+        path = f'./{date_start}_{date_end}_QA-QC_SODAR/'
+        merged_df = df_merge(lf, args)
         
-        try:
-            os.makedirs(f'{date_start}_{date_end}_QA-QC_SODAR', exist_ok=True)
-            path = f'./{date_start}_{date_end}_QA-QC_SODAR/'
-            merged_df = df_merge(lf, args)
-            
-            if args.qafile | args.transpose:
-                if args.transpose:
-                    df = merged_df.transpose(include_header=True)
-                    file = str(date_start + '_' + date_end  + '_' + 'SODAR-Checkfile-Transpose' + '.csv')
-                    df.write_csv(file=f'{path}/{file}',include_header=False, float_scientific=False, float_precision=2)
-                else:
-                    df = merged_df
-                    file = str(date_start + '_' + date_end  + '_' + 'SODAR_QA-QC_Checkfile' + '.csv')
-                    df.write_csv(file=f'{path}/{file}', include_header=True,float_scientific=False, float_precision=2)
-
-            elif args.longform:
-                df = merged_df.collect()
-                file = str(date_start + '_' + date_end + '_' + 'SODAR-longform' + '.csv' )
-                df.write_csv(file=f'{path}/{file}' ,include_header=True, float_scientific=False, float_precision=2)
-
-            elif args.dat:
-                for h, df in merged_df.items():
-                    file = str(f'SODAR{h}' + '.dat') 
-                    df.write_csv(file=f'{path}/{file}', include_header=False, quote_char='"', quote_style='non_numeric',float_precision=2)
-
-            elif args.compare:
-                df = read_file.collect()
-                file = str(date_start + '_' + date_end + '_' + 'MET-SODAR_compare' + '.csv' )
-                df.write_csv(file=f'{path}/{file}' ,include_header=True, float_scientific=False, float_precision=2)
-
+        if args.qafile | args.transpose:
+            if args.transpose:
+                df = merged_df.transpose(include_header=True)
+                file = str(date_start + '_' + date_end  + '_' + 'SODAR-Checkfile-Transpose' + '.csv')
+                df.write_csv(file=f'{path}/{file}',include_header=False, float_scientific=False, float_precision=2)
             else:
-                for h, df in merged_df.items():
-                    file = str(date_start + '_' + date_end + '_' + f'SODAR{h}_QA-QC' + '.csv')
-                    df.write_csv(file=f'{path}/{file}' ,include_header=True, float_precision=2)
+                df = merged_df
+                file = str(date_start + '_' + date_end  + '_' + 'SODAR_QA-QC_Checkfile' + '.csv')
+                df.write_csv(file=f'{path}/{file}', include_header=True,float_scientific=False, float_precision=2)
 
-        except Exception as e:
-            logging.error(f"Error writing to csv: {e}")
-            print(f"Error writing to csv: {e}")
+        elif args.longform:
+            df = merged_df.collect()
+            file = str(date_start + '_' + date_end + '_' + 'SODAR-longform' + '.csv' )
+            df.write_csv(file=f'{path}/{file}' ,include_header=True, float_scientific=False, float_precision=2)
+
+        elif args.dat:
+            for h, df in merged_df.items():
+                file = str(f'SODAR{h}' + '.dat') 
+                df.write_csv(file=f'{path}/{file}', include_header=False, quote_char='"', quote_style='non_numeric',float_precision=2)
+
+        elif args.compare:
+            df = read_file.collect()
+            file = str(date_start + '_' + date_end + '_' + 'MET-SODAR_compare' + '.csv' )
+            df.write_csv(file=f'{path}/{file}' ,include_header=True, float_scientific=False, float_precision=2)
+
+        else:
+            for h, df in merged_df.items():
+                file = str(date_start + '_' + date_end + '_' + f'SODAR{h}_QA-QC' + '.csv')
+                df.write_csv(file=f'{path}/{file}' ,include_header=True, float_precision=2)
+
+    except Exception as e:
+        logging.error(f"Error writing to csv: {e}")
+        print(f"Error writing to csv: {e}")
 
 
