@@ -6,3 +6,7 @@ Central_API
 log*
 *.db
 ./Data_Check/test_files
+*.zip
+./QA_QC/SodarQC/GP*
+./QA_QC/SodarQC/2025*
+
