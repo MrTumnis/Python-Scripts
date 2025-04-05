@@ -297,131 +297,150 @@ def precip_check(lf):
         logging.error(f"Error performing precip check: {e}")
 
 
-def df_merge(lf, args):
-    try:
-        lf1 = pl.concat(speed_profile_check(lf), how='horizontal', parallel=True)
-        lf2 = pl.concat(standard_dev_check(lf), how='horizontal', parallel=True)
-        lf3 = pl.concat(noise_check(lf), how='horizontal', parallel=True)
-        lf4 = pl.concat(echo_check(lf), how='horizontal', parallel=True)
-        lf5 = pl.concat(precip_check(lf), how='horizontal', parallel=True)
-        df1 = pl.concat([lf,lf1,lf2,lf3,lf4,lf5], how='horizontal', parallel=True).collect()
-        qa_file = pl.concat([lf1,lf2,lf3,lf4,lf5],how='horizontal',parallel=True).collect()
-        check_dict = {} 
-        df_time = df1.select('TIMESTAMP')
+def df_merge(lf, met_df=None, args=None):
+    # try:
+    lf1 = pl.concat(speed_profile_check(lf), how='horizontal', parallel=True)
+    lf2 = pl.concat(standard_dev_check(lf), how='horizontal', parallel=True)
+    lf3 = pl.concat(noise_check(lf), how='horizontal', parallel=True)
+    lf4 = pl.concat(echo_check(lf), how='horizontal', parallel=True)
+    lf5 = pl.concat(precip_check(lf), how='horizontal', parallel=True)
+    df1 = pl.concat([lf,lf1,lf2,lf3,lf4,lf5], how='horizontal', parallel=True).collect()
+    qa_file = pl.concat([lf1,lf2,lf3,lf4,lf5],how='horizontal',parallel=True).collect()
+    check_dict = {} 
+    df_time = df1.select('TIMESTAMP')
 
-        '''Return the minimum validity code (0, 2, or 9) for each check as the reliabilty for each wind component. Precip_Check flag sets the validity to 3. *will likely need to seperate the "0" checks for each range gate'''
-        h = 30
-        while h < 141:
-            df2 = df1.select(pl
-                .when(pl.col(f'Precip_Check_{h}') < 4)
-                .then(3)
-                .otherwise(pl
-                .min_horizontal([(f'W_Speed_Check_{h}'),(f'STD_Reliability_{h}'),(f'Echo_Check_{h}'),(f'Noise_Check_{h}')]))
-                .alias(f'W_Zero{h}').cast(pl.UInt32)
-            )
-            df3 = df1.select(pl
-                .when(pl.col(f'Precip_Check_{h}') < 4)
-                .then(3)
-                .otherwise(pl
-                .min_horizontal([(f'V_Speed_Check_{h}'),(f'STD_Reliability_{h}'),(f'Echo_Check_{h}'),(f'Noise_Check_{h}')]))
-                .alias(f'V_Zero{h}').cast(pl.UInt32)
-            )
-            df4 = df1.select(pl
-                .when(pl.col(f'Precip_Check_{h}') < 4)
-                .then(3)
-                .otherwise(pl
-                .min_horizontal([(f'U_Speed_Check_{h}'),(f'STD_Reliability_{h}'),(f'Echo_Check_{h}'),(f'Noise_Check_{h}')]))
-                .alias(f'U_Zero{h}').cast(pl.UInt32)
-            )
-            zero_check = pl.concat([df1,df2,df3,df4], how='horizontal')
+    '''Return the minimum validity code (0, 2, or 9) for each check as the reliabilty for each wind component. Precip_Check flag sets the validity to 3.'''
+    h = 30
+    while h < 141:
+        df2 = df1.select(pl
+            .when(pl.col(f'Precip_Check_{h}') < 4)
+            .then(3)
+            .otherwise(pl
+            .min_horizontal([(f'W_Speed_Check_{h}'),(f'STD_Reliability_{h}'),(f'Echo_Check_{h}'),(f'Noise_Check_{h}')]))
+            .alias(f'W_Zero{h}').cast(pl.UInt32)
+        )
+        df3 = df1.select(pl
+            .when(pl.col(f'Precip_Check_{h}') < 4)
+            .then(3)
+            .otherwise(pl
+            .min_horizontal([(f'V_Speed_Check_{h}'),(f'STD_Reliability_{h}'),(f'Echo_Check_{h}'),(f'Noise_Check_{h}')]))
+            .alias(f'V_Zero{h}').cast(pl.UInt32)
+        )
+        df4 = df1.select(pl
+            .when(pl.col(f'Precip_Check_{h}') < 4)
+            .then(3)
+            .otherwise(pl
+            .min_horizontal([(f'U_Speed_Check_{h}'),(f'STD_Reliability_{h}'),(f'Echo_Check_{h}'),(f'Noise_Check_{h}')]))
+            .alias(f'U_Zero{h}').cast(pl.UInt32)
+        )
+        zero_check = pl.concat([df1,df2,df3,df4], how='horizontal')
 
-            w_df = zero_check.select(pl
-                .when(pl.col(f'W_Reliability_{h}') == 0)
-                .then(0)
-                .otherwise(pl.col(f'W_Zero{h}'))
-                .alias(f'W_Reliability_{h}').cast(pl.UInt32)
-            )
-            v_df = zero_check.select(pl
-                .when(pl.col(f'V_Reliability_{h}') == 0)
-                .then(0)
-                .otherwise(pl.col(f'V_Zero{h}'))
-                .alias(f'V_Reliability_{h}').cast(pl.UInt32)
-            )
-            u_df = zero_check.select(pl
-                .when(pl.col(f'U_Reliability_{h}') == 0)
-                .then(0)
-                .otherwise(pl.col(f'U_Zero{h}'))
-                .alias(f'U_Reliability_{h}').cast(pl.UInt32)
-            )
-            wvu_df = pl.concat([w_df,v_df,u_df], how='horizontal')
-            time_df = df_time.hstack(wvu_df)
-            check_dict.update({h:time_df}) 
+        w_df = zero_check.select(pl
+            .when(pl.col(f'W_Reliability_{h}') == 0)
+            .then(0)
+            .otherwise(pl.col(f'W_Zero{h}'))
+            .alias(f'W_Reliability_{h}').cast(pl.UInt32)
+        )
+        v_df = zero_check.select(pl
+            .when(pl.col(f'V_Reliability_{h}') == 0)
+            .then(0)
+            .otherwise(pl.col(f'V_Zero{h}'))
+            .alias(f'V_Reliability_{h}').cast(pl.UInt32)
+        )
+        u_df = zero_check.select(pl
+            .when(pl.col(f'U_Reliability_{h}') == 0)
+            .then(0)
+            .otherwise(pl.col(f'U_Zero{h}'))
+            .alias(f'U_Reliability_{h}').cast(pl.UInt32)
+        )
+        wvu_df = pl.concat([w_df,v_df,u_df], how='horizontal')
+        time_df = df_time.hstack(wvu_df)
+        check_dict.update({h:time_df}) 
 
-            h += 5
+        h += 5
 
-        h_list = []
-        for h in range(35,141,5):
-            h_list.append(check_dict[h])
-        
-        df5 = check_dict[30]
+    h_list = []
+    for h in range(35,141,5):
+        h_list.append(check_dict[h])
+    
+    df5 = check_dict[30]
 
-        for df in h_list: 
-            df5 = df5.join(df, on='TIMESTAMP', how='inner', coalesce=False)
-        
-        # Replace columns in original dataframe with the check values
-        lf2 = lf.collect()
-        common_columns = set(df5.columns) & set(lf2.columns)
-        long_df = lf.with_columns([df5[col].alias(col) for col in common_columns])
-       
-        if args.qafile | args.transpose:
-            qa_df = qa_file.with_columns([df5[col].alias(col) for col in common_columns])
-            qc_dict = {}
-            t = 30
-            while t < 141:
-                t2 = t + 100 
-                sort = qa_df.select('TIMESTAMP', (cs.ends_with(f'{t}')) & (cs.exclude(cs.ends_with(f'{t2}'))))
-                qc_dict.update({t:sort})
-                t += 5
+    for df in h_list: 
+        df5 = df5.join(df, on='TIMESTAMP', how='inner', coalesce=False)
+    
+    # Replace columns in original dataframe with the check values
+    lf2 = lf.collect()
+    common_columns = set(df5.columns) & set(lf2.columns)
+    long_df = lf.with_columns([df5[col].alias(col) for col in common_columns])
+   
+    if args.qafile | args.transpose:
+        qa_df = qa_file.with_columns([df5[col].alias(col) for col in common_columns])
+        qc_dict = {}
+        t = 30
+        while t < 141:
+            t2 = t + 100 
+            sort = qa_df.select('TIMESTAMP', (cs.ends_with(f'{t}')) & (cs.exclude(cs.ends_with(f'{t2}'))))
+            qc_dict.update({t:sort})
+            t += 5
 
-            df2 = qc_dict[30]
-            i = 35
-            while i < 145:
-                df2 = df2.join(qc_dict[i],on='TIMESTAMP', how='inner')
-                i+=5
+        df2 = qc_dict[30]
+        i = 35
+        while i < 145:
+            df2 = df2.join(qc_dict[i],on='TIMESTAMP', how='inner')
+            i+=5
 
-            qc_df = df2.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d %H:%M:%S'))
+        qc_df = df2.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d %H:%M:%S'))
 
-            return qc_df 
+        return qc_df 
 
 
-        elif args.longform:
-            longform = long_df.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d %H:%M:%S'))
-            return longform
+    elif args.longform:
+        longform = long_df.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d %H:%M:%S'))
+        return longform
+
+    else:
+        fnl_dict = {}
+        f = 30
+        while f < 141 :
+            f2 = f + 100 #quick way to exclude the files in the 100's from the iteration. i.e not returning 140m with the 40m file
+            split_df = long_df.select('TIMESTAMP',(cs.ends_with(f'_{f}')) & (cs.exclude(cs.ends_with(f'_{f2}'))))
+            
+            named_df = split_df.rename(lambda column_name:column_name.strip(f'_{f}'))
+            fnl_df = named_df.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d %H:%M:%S')).collect()
+            fnl_dict.update({f:fnl_df}) 
+
+            f += 5
+
+        '''Select the WindSpeed columns from Met and Sodar30 and compare the values.'''
+        if args.compare:
+            df_met = met_df.collect()
+            df_time = df_met.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d %H:%M:%S'))
+            sodar_30 = fnl_dict[30]
+            df_com = df_time.join(sodar_30, on='TIMESTAMP')
+            print(sodar_30.columns)
+            speed_check = df_com.select(pl
+                .when(pl.col('W_Reliability') > 0)
+                .then(pl.when(pl.col('WS_ms_S_WVT') - pl.col('W_Speed') <= 1.5 ).then(9))
+                .otherwise(0)
+                .alias(f'Wind10m_Reliability')
+                 )
+
+            # speed_check = df_com.select(pl
+            #     .when(pl.col('WS_ms_S_WVT') - pl.col('W_Speed') <= 1.5 )
+            #     .then(9)
+            #     .otherwise(0)
+            #     .alias('Wind_Reliability')
+            #      )
+            df1 = pl.concat([df_com,speed_check], how='horizontal') 
+            fnl_df = df1.select([pl.col('TIMESTAMP'),pl.col('WS_ms_S_WVT'), pl.col('W_Speed'), pl.col('Wind10m_Reliability')]) 
+            return fnl_df
 
         else:
-            fnl_dict = {}
-            f = 30
-            while f < 141 :
-                f2 = f + 100 #quick way to exclude the files in the 100's from the iteration. i.e not returning 140m with the 40m file
-                split_df = long_df.select('TIMESTAMP',(cs.ends_with(f'_{f}')) & (cs.exclude(cs.ends_with(f'_{f2}'))))
-                
-                named_df = split_df.rename(lambda column_name:column_name.strip(f'_{f}'))
-                fnl_df = named_df.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d %H:%M:%S')).collect()
-                fnl_dict.update({f:fnl_df}) 
-
-                f += 5
-
-            if args.compare:
-                # met_file = read_file(met=True)
-                # print("Met file:", met_file.collect())
-                df_30 = fnl_dict[30] 
-                print("Sodar30 file:", df_30)
-                
             return fnl_dict
 
-    except Exception as e:
-       logging.error(f"Error in processing final dataframe: {e}")
-       print({e})
+    # except Exception as e:
+    #    logging.error(f"Error in processing final dataframe: {e}")
+    #    print({e})
 
 
 if __name__ == '__main__': 
@@ -435,8 +454,11 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.compare:
-        met_file = read_file(met=True)
-        print("Met file:", met_file)
+        df_tup = read_file(met=True)
+        met_df = df_tup[0]
+        df = df_tup[1]
+        lf = lf_merge(df)
+        merged_df = df_merge(lf, met_df, args)
     
     elif args.version:
         pl.show_versions()
@@ -445,6 +467,7 @@ if __name__ == '__main__':
     else:
         #global dataframes 
         df = read_file()
+        print("df Test:", df)
         lf = lf_merge(df)
 
     try:
@@ -460,7 +483,12 @@ if __name__ == '__main__':
     try:
         os.makedirs(f'{date_start}_{date_end}_QA-QC_SODAR', exist_ok=True)
         path = f'./{date_start}_{date_end}_QA-QC_SODAR/'
-        merged_df = df_merge(lf, args)
+
+        if args.compare:
+           pass 
+
+        else:
+            merged_df = df_merge(lf, args)
         
         if args.qafile | args.transpose:
             if args.transpose:
@@ -473,7 +501,7 @@ if __name__ == '__main__':
                 df.write_csv(file=f'{path}/{file}', include_header=True,float_scientific=False, float_precision=2)
 
         elif args.longform:
-            df = merged_df.collect()
+            df = merged_df
             file = str(date_start + '_' + date_end + '_' + 'SODAR-longform' + '.csv' )
             df.write_csv(file=f'{path}/{file}' ,include_header=True, float_scientific=False, float_precision=2)
 
@@ -483,7 +511,8 @@ if __name__ == '__main__':
                 df.write_csv(file=f'{path}/{file}', include_header=False, quote_char='"', quote_style='non_numeric',float_precision=2)
 
         elif args.compare:
-            df = read_file.collect()
+            df = merged_df
+            print("compare", df)
             file = str(date_start + '_' + date_end + '_' + 'MET-SODAR_compare' + '.csv' )
             df.write_csv(file=f'{path}/{file}' ,include_header=True, float_scientific=False, float_precision=2)
 
