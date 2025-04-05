@@ -5,4 +5,4 @@ Central_API
 .venv
 log*
 *.db
-Data_Check/test_files
+./Data_Check/test_files

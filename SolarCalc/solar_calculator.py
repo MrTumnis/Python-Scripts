@@ -18,8 +18,8 @@ import json
 import logging 
 from fpdf import FPDF
 
-save_path = '/home/thomas/Python-Scripts/SolarCalc/datatable.json'
-temp_path= '/home/thomas/Python-Scripts/SolarCalc/.temp.json'
+save_path = '/home/thomas/projects/Python-Scripts/SolarCalc/datatable.json'
+temp_path= '/home/thomas/projects/Python-Scripts/SolarCalc/.temp.json'
 
 logging.basicConfig(filename = 'log_solarcalc.log',
                     format = '%(asctime)s %(message)s',
@@ -35,7 +35,7 @@ st.set_page_config(
     }
 )
     
-advm2_logo = '/home/thomas/Python-Scripts/SolarCalc/advm2logo.png'
+advm2_logo = '/home/thomas/projects/Python-Scripts/SolarCalc/advm2logo.png'
 st.logo(advm2_logo)
 st.title("Solar Calculator")
 site = st.text_input(label='Site Name')
