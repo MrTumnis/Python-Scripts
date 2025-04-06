@@ -297,7 +297,7 @@ def precip_check(lf):
         logging.error(f"Error performing precip check: {e}")
 
 
-def df_merge(lf, met_df=None, args=None):
+def df_merge(lf, args, met_df=None):
     # try:
     lf1 = pl.concat(speed_profile_check(lf), how='horizontal', parallel=True)
     lf2 = pl.concat(standard_dev_check(lf), how='horizontal', parallel=True)
@@ -415,24 +415,28 @@ def df_merge(lf, met_df=None, args=None):
         if args.compare:
             df_met = met_df.collect()
             df_time = df_met.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d %H:%M:%S'))
-            sodar_30 = fnl_dict[30]
-            df_com = df_time.join(sodar_30, on='TIMESTAMP')
-            print(sodar_30.columns)
+            range_gate = [str(i) for i in range(30,145,5)]
+            files_menu = TerminalMenu(range_gate , title=('Which Sodar Wind Speed height would you like to compare?'))
+            selection = files_menu.show()
+            height = range_gate[selection] 
+            h = int(height)
+            sodar_height = fnl_dict[h]
+
+            df_com = df_time.join(sodar_height, on='TIMESTAMP')
+
             speed_check = df_com.select(pl
-                .when(pl.col('W_Reliability') > 0)
-                .then(pl.when(pl.col('WS_ms_S_WVT') - pl.col('W_Speed') <= 1.5 ).then(9))
-                .otherwise(0)
+                .when(pl.col('W_Reliability') == 0)
+                .then(0)
+                .otherwise(pl.when(pl.col('WS_ms_S_WVT') - pl.col('W_Speed') <= 1 ).then(9))
                 .alias(f'Wind10m_Reliability')
                  )
 
-            # speed_check = df_com.select(pl
-            #     .when(pl.col('WS_ms_S_WVT') - pl.col('W_Speed') <= 1.5 )
-            #     .then(9)
-            #     .otherwise(0)
-            #     .alias('Wind_Reliability')
-            #      )
-            df1 = pl.concat([df_com,speed_check], how='horizontal') 
-            fnl_df = df1.select([pl.col('TIMESTAMP'),pl.col('WS_ms_S_WVT'), pl.col('W_Speed'), pl.col('Wind10m_Reliability')]) 
+            df_wind_diff = df_com.with_columns((pl.col('WS_ms_S_WVT') - pl.col('W_Speed')).alias('Difference'))
+
+            df1 = pl.concat([df_wind_diff,speed_check], how='horizontal') 
+
+            fnl_df = df1.select([pl.col('TIMESTAMP'),pl.col('WS_ms_S_WVT'), pl.col('W_Speed'),pl.col('Difference'), pl.col('Wind10m_Reliability')]) 
+
             return fnl_df
 
         else:
@@ -453,6 +457,7 @@ if __name__ == '__main__':
     parser.add_argument('-v', '--version', action='store_true', help="Show the versions of libraries")
     args = parser.parse_args()
 
+   
     if args.compare:
         df_tup = read_file(met=True)
         met_df = df_tup[0]
@@ -467,62 +472,56 @@ if __name__ == '__main__':
     else:
         #global dataframes 
         df = read_file()
-        print("df Test:", df)
         lf = lf_merge(df)
-
-    try:
-        #likely an easier and better way to get start and end time of file range 
-        date_df = lf 
-        date = date_df.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d')).collect()
-        date_start = date[1,0]
-        date_end = date[-1,0]
-                
-    except Exception as e:
-        logging.error(f"Error collecting start and end dates {e}")
     
-    try:
-        os.makedirs(f'{date_start}_{date_end}_QA-QC_SODAR', exist_ok=True)
-        path = f'./{date_start}_{date_end}_QA-QC_SODAR/'
+    # try:
+    if args.compare:
+       pass 
 
-        if args.compare:
-           pass 
+    else:
+        merged_df = df_merge(lf, args)
 
+    #likely an easier and better way to get start and end time of file range 
+    date_df = lf 
+    date = date_df.with_columns(pl.col('TIMESTAMP').dt.strftime('%Y-%m-%d')).collect()
+    date_start = date[1,0]
+    date_end = date[-1,0]
+
+    os.makedirs(f'{date_start}_{date_end}_QA-QC_SODAR', exist_ok=True)
+    path = f'./{date_start}_{date_end}_QA-QC_SODAR/'
+
+    if args.qafile | args.transpose:
+        if args.transpose:
+            df = merged_df.transpose(include_header=True)
+            file = str(date_start + '_' + date_end  + '_' + 'SODAR-Checkfile-Transpose' + '.csv')
+            df.write_csv(file=f'{path}/{file}',include_header=False, float_scientific=False, float_precision=2)
         else:
-            merged_df = df_merge(lf, args)
-        
-        if args.qafile | args.transpose:
-            if args.transpose:
-                df = merged_df.transpose(include_header=True)
-                file = str(date_start + '_' + date_end  + '_' + 'SODAR-Checkfile-Transpose' + '.csv')
-                df.write_csv(file=f'{path}/{file}',include_header=False, float_scientific=False, float_precision=2)
-            else:
-                df = merged_df
-                file = str(date_start + '_' + date_end  + '_' + 'SODAR_QA-QC_Checkfile' + '.csv')
-                df.write_csv(file=f'{path}/{file}', include_header=True,float_scientific=False, float_precision=2)
-
-        elif args.longform:
             df = merged_df
-            file = str(date_start + '_' + date_end + '_' + 'SODAR-longform' + '.csv' )
-            df.write_csv(file=f'{path}/{file}' ,include_header=True, float_scientific=False, float_precision=2)
+            file = str(date_start + '_' + date_end  + '_' + 'SODAR_QA-QC_Checkfile' + '.csv')
+            df.write_csv(file=f'{path}/{file}', include_header=True,float_scientific=False, float_precision=2)
 
-        elif args.dat:
-            for h, df in merged_df.items():
-                file = str(f'SODAR{h}' + '.dat') 
-                df.write_csv(file=f'{path}/{file}', include_header=False, quote_char='"', quote_style='non_numeric',float_precision=2)
+    elif args.longform:
+        df = merged_df
+        file = str(date_start + '_' + date_end + '_' + 'SODAR-longform' + '.csv' )
+        df.write_csv(file=f'{path}/{file}' ,include_header=True, float_scientific=False, float_precision=2)
 
-        elif args.compare:
-            df = merged_df
-            print("compare", df)
-            file = str(date_start + '_' + date_end + '_' + 'MET-SODAR_compare' + '.csv' )
-            df.write_csv(file=f'{path}/{file}' ,include_header=True, float_scientific=False, float_precision=2)
+    elif args.dat:
+        for h, df in merged_df.items():
+            file = str(f'SODAR{h}' + '.dat') 
+            df.write_csv(file=f'{path}/{file}', include_header=False, quote_char='"', quote_style='non_numeric',float_precision=2)
 
-        else:
-            for h, df in merged_df.items():
-                file = str(date_start + '_' + date_end + '_' + f'SODAR{h}_QA-QC' + '.csv')
-                df.write_csv(file=f'{path}/{file}' ,include_header=True, float_precision=2)
+    elif args.compare:
+        df = merged_df
+        file = str(date_start + '_' + date_end + '_' + 'MET-SODAR_compare' + '.csv' )
+        df.write_csv(file=f'{path}/{file}' ,include_header=True, float_scientific=False, float_precision=2)
 
-    except Exception as e:
-        logging.error(f"Error writing to csv: {e}")
-        print(f"Error writing to csv: {e}")
+    else:
+        for h, df in merged_df.items():
+            file = str(date_start + '_' + date_end + '_' + f'SODAR{h}_QA-QC' + '.csv')
+            df.write_csv(file=f'{path}/{file}' ,include_header=True, float_precision=2)
+
+    # except Exception as e:
+    #     logging.error(f"Error writing to csv: {e}")
+    #     print(f"Error writing to csv: {e}")
 
 
