@@ -9,4 +9,4 @@ log*
 *.zip
 ./QA_QC/SodarQC/GP*
 ./QA_QC/SodarQC/2025*
-
+/home/thomas/dev/python/scripts/tools/*.csv

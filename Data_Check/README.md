@@ -7,6 +7,10 @@ Choose the types of checks
     - have a multi select box, or drop down where you can choose the columns to compare and the type of check to do?
         i.e compare the 10m wind to the 20m wind and see if the data is within +- 10% agreement or similar. 
 
+Flag annomolies
+    - 10m wind sensor is opposite from 20m wind sensor. 
+
+
 QA_QC level 1 and 2
 
 
