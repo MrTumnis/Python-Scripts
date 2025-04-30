@@ -6,9 +6,11 @@ import argparse
 import glob
 import zipfile
 from simple_term_menu import TerminalMenu
+from datetime import datetime
 
 
 """Need to add column for RECORD number if does not exist"""
+
 '''Schema for BAM data'''
 schema = {'column_1': pl.String, 'column_2': pl.Float64, 'column_3': pl.Float64, 'column_4': pl.Float64, 'column_5': pl.Float64, 'column_6': pl.Float64, 'column_7': pl.Float64, 'column_8': pl.Float64, 'column_9': pl.Float64, 'column_10': pl.Int8,
           'column_11': pl.Int8, 'column_12': pl.Int8, 'column_13': pl.Int8, 'column_14': pl.Int8, 'column_15': pl.Int8, 'column_16': pl.Int8, 'column_17': pl.Int8, 'column_18': pl.Int8, 'column_19': pl.Int8, 'column_20': pl.Int8, 'column_21': pl.Int8}
@@ -36,20 +38,25 @@ def read_file(args):
 
     col = df_file.collect_schema().names()
 
-    # change the timestamp format
-    df_csv = df_file.with_columns(
-        [pl.col(cols).str.strip_chars().alias(cols) for cols in col])
-    df_time = df_csv.with_columns(pl.col('column_1')
-                                  .str.to_datetime('%m/%d/%y %H:%M', time_unit=None, time_zone=None, strict=False)
-                                  .dt.strftime('%Y-%m-%d %H:%M:%S')
-                                  .alias('column_1')).cast(schema)
+    df = df_file.collect()
+    date_time = df.select('column_1').row(0)
+
+    datetime_str = date_time[0]
+    expected_format = '%Y-%m-%d %H:%M:%S'
+
+    if datetime.strptime(datetime_str, expected_format):
+        df_time = df_file
+
+    else:
+        df_csv = df_file.with_columns(
+            [pl.col(cols).str.strip_chars().alias(cols) for cols in col])
+
+        df_time = df_csv.with_columns(pl.col('column_1')
+                                      .str.to_datetime('%m/%d/%y %H:%M', time_unit=None, time_zone=None, strict=False)
+                                      .dt.strftime('%Y-%m-%d %H:%M:%S')
+                                      .alias('column_1')).cast(schema)
 
     try:
-        # if len(col) > 22:
-        #     df_n = df_csv.drop('column_22')
-        #     df = df_n.cast(schema)
-
-        # else:
         pm_name = ['PM10', 'PM2.5', 'PM25',
                    'pm10', 'pm2.5', 'pm25', 'BAM', 'bam']
         if any(name in file_path for name in pm_name):
@@ -72,7 +79,6 @@ def read_file(args):
             df1 = pl.Series('column_r', rec_list)
 
             df = df.insert_column(1, df1)
-            print(df)
 
         if args.dat:
             df_fmt = df.select(
@@ -82,6 +88,7 @@ def read_file(args):
 
             df_fnl.write_csv(file=f'{name}' + '.dat',
                              include_header=False, quote_style='never')
+            print("Success!!")
 
         elif args.csv:
             if file_n == 'csv':
@@ -92,7 +99,7 @@ def read_file(args):
         else:
             print("File not recognized")
 
-    except ColumnNotFoundError as e:
+    except ColumnNotFoundError:
         print("⚠️Need to delete header before trying to convert⚠️ ")
 
 
