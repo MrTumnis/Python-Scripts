@@ -19,8 +19,8 @@ import logging
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 
-cwd = os.getcwd()
-
+# cwd = os.getcwd()
+cwd = os.path.dirname(os.path.abspath(__file__))
 save_path = f"{cwd}/datatable.json"
 temp_path = f"{cwd}/.temp.json"
 
