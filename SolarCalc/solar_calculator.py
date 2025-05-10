@@ -504,6 +504,7 @@ def create_pdf():
             fill = not fill
             return True
 
+    'Ignore the None Output'
     add_table(['Solar Items', 'Amps', 'Watts'], DF.rows(),
               [60, 60, 60], title="Station Items")
 
