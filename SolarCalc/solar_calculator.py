@@ -19,8 +19,11 @@ import logging
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 
-save_path = '/home/thomas/dev/python/scripts/SolarCalc/datatable.json'
-temp_path = '/home/thomas/dev/python/scripts/SolarCalc/.temp.json'
+cwd = os.getcwd()
+
+save_path = f"{cwd}/datatable.json"
+temp_path = f"{cwd}/.temp.json"
+
 
 logging.basicConfig(filename='log_solarcalc.log',
                     format='%(asctime)s %(message)s',
@@ -36,7 +39,7 @@ st.set_page_config(
     }
 )
 
-advm2_logo = '/home/thomas/dev/python/scripts/SolarCalc/advm2logo.png'
+advm2_logo = f'{cwd}/advm2logo.png'
 st.logo(advm2_logo)
 st.title("Solar Calculator")
 site = st.text_input(label='Site Name')
@@ -504,7 +507,7 @@ def create_pdf():
             fill = not fill
             return True
 
-    'Ignore the None Output'
+    'Ignore the None Output until re-write'
     add_table(['Solar Items', 'Amps', 'Watts'], DF.rows(),
               [60, 60, 60], title="Station Items")
 
