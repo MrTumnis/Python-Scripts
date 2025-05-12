@@ -505,7 +505,6 @@ def create_pdf():
     pdf.set_font("Times", size=10)
 
     def add_main_table(headers, rows, col_widths, title=None):
-        print(rows)
         if title:
             pdf.section_title(title)
         # Header
