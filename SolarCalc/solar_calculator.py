@@ -81,6 +81,7 @@ cloudy_days = st.sidebar.selectbox(
     cloudy_day['days'], key='cloudy days', index=1)
 
 panel_amps = st.sidebar.number_input("Panel Amperage", value=0)
+panel_watts = st.sidebar.number_input("Panel Watts", value=0)
 
 # Main Datatable
 col_list = ['Solar Items', 'Amps', 'Watts']
@@ -329,16 +330,19 @@ try:
         ((pl.col('amps_week') / 7) / 24).round(2)).item(0, 0)
 
     inverter_min = watt_hour_df.select(
-        (pl.col('watt_hour') * sys_voltage).round(2)).item(0, 0)
+        (pl.col('watt_hour') * 2).round(2)).item(0, 0)
 
     solar_amps = round((amps_day / sun_days), 1)
 
-    amps_res = ((cloudy_days * amps_per_day) / batt_discharge)
+    amps_res = math.ceil((cloudy_days * amps_per_day) / batt_discharge)
 
     if panel_amps > 0:
         solar_panels = math.ceil(solar_amps / panel_amps)
     else:
         solar_panels = 0
+
+    charge_controller = math.ceil((
+        (solar_panels * panel_watts)/sys_voltage)*1.3)
 
 except Exception as e:
     logging.error(f"Error occured in calculations: {e}")
@@ -385,6 +389,7 @@ try:
     df_result = st.sidebar.dataframe({
         "Total Amps in Reserve": f'{amps_res}',
         "Inverter Size": f'{inverter_min} Watts',
+        "Charge Controller Size": f'{charge_controller} Amps',
         "Solar Amps Required": f'{solar_amps} Amps',
         "Total Solar Panels": f'{solar_panels}',
         f"{batt_voltage}-Volt Batteries Required": f'{batt_tot}'
@@ -495,9 +500,10 @@ def create_pdf():
     DF_RESULT = pl.DataFrame({
         "Total Amps in Reserve": f'{amps_res}',
         "Inverter Size": f'{inverter_min} Watts',
+        "Charge Contoller Size": f'{charge_controller} Amps',
         "Solar Amps Required": f'{solar_amps} Amps',
         "Total Solar Panels": f'{solar_panels}',
-        f"{batt_voltage}-Volt Batteries Required": f'{batt_tot}'
+        f"{batt_voltage}-Volt Batt Required": f'{batt_tot}'
     })
 
     pdf = StyledPDF()
@@ -569,7 +575,7 @@ def create_pdf():
               33] * 6, title="Wattage and Amperage Totals")
 
     add_table(list(DF_RESULT.columns), DF_RESULT.rows(), [
-              38.5] * 5, title="Final System Requirements")
+              33] * 6, title="Final System Requirements")
 
     pdf_output = io.BytesIO()
     pdf.output(pdf_output)
