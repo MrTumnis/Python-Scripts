@@ -80,8 +80,19 @@ cloudy_days = st.sidebar.selectbox(
     'Continuos Cloudy Days',
     cloudy_day['days'], key='cloudy days', index=1)
 
-panel_amps = st.sidebar.number_input("Panel Amperage", value=0)
-panel_watts = st.sidebar.number_input("Panel Watts", value=0)
+# panels_con = pl.DataFrame({
+#     'conf': ['Series', 'Parallel']
+# })
+
+# panels_config = st.sidebar.selectbox(
+#     'Panel Configuration',
+#     panels_con['conf'], key='config', index=1, help='Currently only used in charge controller calculation'
+# )
+
+panel_amps = st.sidebar.number_input(
+    "Panel Amperage", value=0, help='Parallel = amps x number of solar panels')
+# panel_watts = st.sidebar.number_input(
+#     "Panel Watts Total", value=0, help='Series = volts')
 
 # Main Datatable
 col_list = ['Solar Items', 'Amps', 'Watts']
@@ -341,8 +352,16 @@ try:
     else:
         solar_panels = 0
 
-    charge_controller = math.ceil((
-        (solar_panels * panel_watts)/sys_voltage)*1.3)
+    # if panels_config == 'Series':
+    #     charge_con_volts = math.ceil((panel_watts/panel_amps) * solar_panels)
+
+    #     charge_con_amps = math.ceil(
+    #         ((solar_panels * panel_watts)/sys_voltage)*1.3)
+    # else:
+    #     charge_con_volts = math.ceil(panel_watts/panel_amps)
+
+    #     charge_con_amps = math.ceil((
+    #         (solar_panels * panel_watts)/sys_voltage)*1.3)
 
 except Exception as e:
     logging.error(f"Error occured in calculations: {e}")
@@ -389,7 +408,7 @@ try:
     df_result = st.sidebar.dataframe({
         "Total Amps in Reserve": f'{amps_res}',
         "Inverter Size": f'{inverter_min} Watts',
-        "Charge Controller Size": f'{charge_controller} Amps',
+        # "Charge Controller Size": f'{charge_con_volts}volts/{charge_con_amps}amps',
         "Solar Amps Required": f'{solar_amps} Amps',
         "Total Solar Panels": f'{solar_panels}',
         f"{batt_voltage}-Volt Batteries Required": f'{batt_tot}'
@@ -500,7 +519,7 @@ def create_pdf():
     DF_RESULT = pl.DataFrame({
         "Total Amps in Reserve": f'{amps_res}',
         "Inverter Size": f'{inverter_min} Watts',
-        "Charge Contoller Size": f'{charge_controller} Amps',
+        # "Charge Contoller Size": f'{charge_controller} Amps',
         "Solar Amps Required": f'{solar_amps} Amps',
         "Total Solar Panels": f'{solar_panels}',
         f"{batt_voltage}-Volt Batt Required": f'{batt_tot}'
@@ -574,7 +593,7 @@ def create_pdf():
               33] * 6, title="Wattage and Amperage Totals")
 
     add_table(list(DF_RESULT.columns), DF_RESULT.rows(), [
-              33] * 6, title="Final System Requirements")
+              38.5] * 5, title="Final System Requirements")
 
     pdf_output = io.BytesIO()
     pdf.output(pdf_output)
