@@ -537,7 +537,6 @@ def create_pdf():
             fill = not fill
 
     def add_table(headers, rows, col_widths, title=None):
-        print(rows)
         if title:
             pdf.section_title(title)
         # Header
