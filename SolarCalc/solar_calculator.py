@@ -159,7 +159,7 @@ if 'datatable' in st.session_state:
     new_df = pl.concat([json_df])
 
 
-if st.button("Save Items", key='save_button', help='Save the Solar Items to File'):
+if st.button("Save Items", key='save_button', help='Save the Solar Items'):
     df = save_user_input()
     if os.path.exists(save_path):
         if os.path.getsize(save_path) > 0:
@@ -424,8 +424,31 @@ class StyledPDF(FPDF):
         self.set_text_color(0, 0, 0)
         self.set_font("Times", size=10)
 
+    def add_main_table(self, headers, rows, col_widths, x=None, y=None, row_height=10):
+
+        if x is not None:
+            self.set_x(x)
+        if y is not None:
+            self.set_y(y)
+
+        # Header row
+        self.set_font("Times", "B", 10)
+        for i, header in enumerate(headers):
+            is_last = i == len(headers) - 1
+            self.cell(col_widths[i], row_height, str(header), border=1,
+                      new_x=XPos.LMARGIN if is_last else XPos.RIGHT,
+                      new_y=YPos.NEXT if is_last else YPos.TOP)
+
+        # Data rows
+        self.set_font("Times", size=10)
+        for row in rows:
+            for i, cell in enumerate(row):
+                is_last = i == len(row) - 1
+                self.cell(col_widths[i], row_height, str(cell), border=1,
+                          new_x=XPos.LMARGIN if is_last else XPos.RIGHT,
+                          new_y=YPos.NEXT if is_last else YPos.TOP)
+
     def add_table(self, headers, rows, col_widths, x=None, y=None, row_height=10):
-        # from fpdf.enums import XPos, YPos
 
         if x is not None:
             self.set_x(x)
@@ -452,6 +475,7 @@ class StyledPDF(FPDF):
 
 def create_pdf():
     DF = pl.DataFrame(col_df)
+
     DF_RES = pl.DataFrame({
         "Amps": f'{amps_tot}',
         "Amps Per Day": f'{amps_day_pdf}',
@@ -480,7 +504,8 @@ def create_pdf():
     pdf.add_page()
     pdf.set_font("Times", size=10)
 
-    def add_table(headers, rows, col_widths, title=None):
+    def add_main_table(headers, rows, col_widths, title=None):
+        print(rows)
         if title:
             pdf.section_title(title)
         # Header
@@ -505,11 +530,38 @@ def create_pdf():
                          new_y=YPos.NEXT if is_last else YPos.TOP)
 
             fill = not fill
-            return True
+
+    def add_table(headers, rows, col_widths, title=None):
+        print(rows)
+        if title:
+            pdf.section_title(title)
+        # Header
+        pdf.set_fill_color(41, 123, 196)
+        pdf.set_font("Times", "B", 9)
+        for i, header in enumerate(headers):
+            is_last = i == len(headers) - 1
+            pdf.cell(col_widths[i], 10, str(header), border=1, fill=True,
+                     new_x=XPos.LMARGIN if is_last else XPos.RIGHT,
+                     new_y=YPos.NEXT if is_last else YPos.TOP)
+
+        pdf.set_font("Times", size=9)
+        # Rows
+        fill = False
+        for row in rows:
+            pdf.set_fill_color(
+                245, 245, 245) if fill else pdf.set_fill_color(255, 255, 255)
+            for idx, datum in enumerate(row):
+                is_last = idx == len(row) - 1
+                pdf.cell(col_widths[idx], 10, str(datum), border=1, fill=fill,
+                         new_x=XPos.LMARGIN if is_last else XPos.RIGHT,
+                         new_y=YPos.NEXT if is_last else YPos.TOP)
+
+            fill = not fill
 
     'Ignore the None Output until re-write'
-    add_table(['Solar Items', 'Amps', 'Watts'], DF.rows(),
-              [60, 60, 60], title="Station Items")
+    # Created a 'add_main_table' to remove issue with not printing all rows on the DF table
+    add_main_table(['Solar Items', 'Amps', 'Watts'], DF.rows(),
+                   [60, 60, 60], title="Station Items")
 
     add_table(list(DF_ITEMS.columns), DF_ITEMS.rows(), [
               33] * 6, title="System Specifications")
